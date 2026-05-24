@@ -16,7 +16,14 @@ from pathlib import Path
 # Make the in-repo `gacct` package importable without needing `pip install .`,
 # so Streamlit Cloud (which caches `pip install .` results) always sees the
 # current sources on every pull.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+_APP_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_APP_DIR))                       # for sibling modules (narrative)
+sys.path.insert(0, str(_APP_DIR.parent / "src"))        # for gacct package
+# Evict any stale `gacct` install that an earlier deploy may have cached in
+# site-packages — we want the in-repo src/ version to win unconditionally.
+for _mod in list(sys.modules):
+    if _mod == "gacct" or _mod.startswith("gacct."):
+        del sys.modules[_mod]
 
 from typing import Dict, List, Optional, Tuple  # noqa: E402
 
@@ -27,9 +34,9 @@ import streamlit as st  # noqa: E402
 
 from gacct.domain.decisions import DecisionRecord  # noqa: E402
 from gacct.scenarios.fixtures import build_consumer_delegation  # noqa: E402
-from gacct.scenarios.narrative import SCENARIO_BRIEFS, brief, step_label  # noqa: E402
 from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
+from narrative import SCENARIO_BRIEFS, brief, step_label  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "traces"
