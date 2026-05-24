@@ -1,0 +1,16 @@
+pack_id: delivery
+version: "1.0.0"
+title: Delivery deadline
+description: >
+  Orders whose promised shipping window exceeds the mission deadline are
+  blocked. Upgrading shipping to meet the deadline is governed separately by
+  the budget pack.
+applies_to_actions:
+  - place_order
+  - upgrade_shipping
+rules:
+  - rule_id: delivery.meets_deadline
+    kind: shipping_within_deadline
+    description: Promised shipping days must not exceed the mission deadline.
+    on_violation: block
+    params: {}

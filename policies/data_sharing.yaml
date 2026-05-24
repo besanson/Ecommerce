@@ -1,0 +1,16 @@
+pack_id: data_sharing
+version: "1.0.0"
+title: Consumer data sharing
+description: >
+  The consumer agent may share only the fields the consumer has explicitly
+  permitted. Any retailer request that requires fields outside that whitelist
+  is blocked at the share-consumer-data boundary.
+applies_to_actions:
+  - share_consumer_data
+  - place_order
+rules:
+  - rule_id: data_sharing.fields_whitelisted
+    kind: requested_fields_within_whitelist
+    description: Every requested field must be in the permitted_data_fields list.
+    on_violation: block
+    params: {}

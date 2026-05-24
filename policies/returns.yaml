@@ -1,0 +1,15 @@
+pack_id: returns
+version: "1.0.0"
+title: Return-policy minimum
+description: >
+  Accepts retailer return terms only if the return window meets or exceeds the
+  consumer's minimum. Worse terms are blocked, not silently accepted.
+applies_to_actions:
+  - accept_return_terms
+  - place_order
+rules:
+  - rule_id: returns.window_meets_minimum
+    kind: return_window_meets_minimum
+    description: Return window in days must meet the consumer's minimum.
+    on_violation: block
+    params: {}

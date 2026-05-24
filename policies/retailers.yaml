@@ -1,0 +1,21 @@
+pack_id: retailers
+version: "1.0.0"
+title: Approved retailers
+description: >
+  Restricts which retailers the consumer agent may transact with. Selection of
+  an unapproved retailer is blocked at the merchant-selection boundary, before
+  any order is placed.
+applies_to_actions:
+  - select_merchant
+  - place_order
+rules:
+  - rule_id: retailers.must_be_approved
+    kind: retailer_in_approved_list
+    description: Retailer must be on the consumer's approved list.
+    on_violation: block
+    params: {}
+  - rule_id: retailers.must_not_be_denied
+    kind: retailer_not_in_denied_list
+    description: Retailer must not be on the consumer's denied list.
+    on_violation: block
+    params: {}

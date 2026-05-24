@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+src/*.egg-info/
+build/
+dist/
+.coverage
+.DS_Store
+.idea/
+.vscode/
+# runtime traces live under traces/runtime/; checked-in examples live under examples/traces/
+traces/runtime/

@@ -1,0 +1,17 @@
+pack_id: auto_buy
+version: "1.0.0"
+title: Auto-buy threshold
+description: >
+  Standalone declaration of the auto-buy ceiling. The budget pack also evaluates
+  the threshold; this pack exists so the threshold can be inspected, versioned,
+  and replaced independently of the budget ceiling.
+applies_to_actions:
+  - use_payment_token
+rules:
+  - rule_id: auto_buy.under_threshold
+    kind: payment_under_auto_buy_threshold
+    description: >
+      Payment token may be used without approval only at or below the auto-buy
+      threshold.
+    on_violation: escalate
+    params: {}

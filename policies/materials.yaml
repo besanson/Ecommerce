@@ -1,0 +1,15 @@
+pack_id: materials
+version: "1.0.0"
+title: Material restrictions
+description: >
+  Blocks orders for products that contain materials the consumer has excluded
+  from the mission (for example, leather).
+applies_to_actions:
+  - place_order
+  - accept_substitute
+rules:
+  - rule_id: materials.no_forbidden_materials
+    kind: product_materials_excluded
+    description: Product must not contain any material on the forbidden list.
+    on_violation: block
+    params: {}

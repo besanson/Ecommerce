@@ -1,0 +1,22 @@
+pack_id: budget
+version: "1.0.0"
+title: Budget ceiling
+description: >
+  Enforces the absolute spend ceiling delegated by the consumer. Total spend
+  is computed at action time as price + shipping - promotion discount.
+applies_to_actions:
+  - place_order
+  - upgrade_shipping
+  - accept_substitute
+rules:
+  - rule_id: budget.over_ceiling
+    kind: total_under_ceiling
+    description: Order total must not exceed the consumer's budget ceiling.
+    on_violation: block
+    params: {}
+  - rule_id: budget.exceeds_auto_buy_threshold
+    kind: total_under_auto_buy_threshold
+    description: >
+      Orders above the auto-buy threshold require explicit consumer approval.
+    on_violation: escalate
+    params: {}

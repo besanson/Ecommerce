@@ -1,0 +1,24 @@
+pack_id: promotions
+version: "1.0.0"
+title: Promotions and discounts
+description: >
+  Promotions are allowed when they reduce total spend and do not require data
+  fields outside the consumer's whitelist. When a promotion would require
+  enrolling in a loyalty program (data-sharing implications), the action is
+  allowed only under explicit conditions.
+applies_to_actions:
+  - apply_promotion
+rules:
+  - rule_id: promotions.must_reduce_total
+    kind: promotion_reduces_total
+    description: A promotion is meaningful only if it reduces the total.
+    on_violation: block
+    params: {}
+  - rule_id: promotions.loyalty_enrollment_requires_condition
+    kind: promotion_without_extra_data_sharing
+    description: >
+      Promotions that require additional data fields are allowed only if the
+      consumer accepts an explicit condition flag.
+    on_violation: allow_with_conditions
+    condition: "loyalty_enrollment_accepted == true"
+    params: {}
