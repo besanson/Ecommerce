@@ -9,20 +9,27 @@ step. A prev/play/next stepper drives the whole view.
 
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-import networkx as nx
-import pandas as pd
-import plotly.graph_objects as go
-import streamlit as st
+# Make the in-repo `gacct` package importable without needing `pip install .`,
+# so Streamlit Cloud (which caches `pip install .` results) always sees the
+# current sources on every pull.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from gacct.domain.decisions import DecisionRecord
-from gacct.scenarios.fixtures import build_consumer_delegation
-from gacct.scenarios.narrative import SCENARIO_BRIEFS, brief, step_label
-from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario
-from gacct.trace.store import TraceStore
+from typing import Dict, List, Optional, Tuple  # noqa: E402
+
+import networkx as nx  # noqa: E402
+import pandas as pd  # noqa: E402
+import plotly.graph_objects as go  # noqa: E402
+import streamlit as st  # noqa: E402
+
+from gacct.domain.decisions import DecisionRecord  # noqa: E402
+from gacct.scenarios.fixtures import build_consumer_delegation  # noqa: E402
+from gacct.scenarios.narrative import SCENARIO_BRIEFS, brief, step_label  # noqa: E402
+from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
+from gacct.trace.store import TraceStore  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "traces"

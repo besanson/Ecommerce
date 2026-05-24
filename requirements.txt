@@ -4,5 +4,3 @@ streamlit>=1.32
 networkx>=3.2
 plotly>=5.20
 pandas>=2.1
-# install the local gacct package from src/ so the Streamlit app can import it
-.
