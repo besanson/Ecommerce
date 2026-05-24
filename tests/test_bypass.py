@@ -46,8 +46,12 @@ def test_retailer_agent_does_not_import_governance():
     enforcement boundary lives on the consumer side."""
 
     src = inspect.getsource(RetailerAgent)
-    assert "from gacct.governance" not in src
-    assert "import gacct.governance" not in src
+    import_lines = [
+        ln.strip() for ln in src.splitlines()
+        if ln.strip().startswith(("from ", "import "))
+    ]
+    bad = [ln for ln in import_lines if "gacct.governance" in ln]
+    assert not bad, f"retailer agent imports governance: {bad}"
 
 
 def test_engine_govern_is_only_public_action_path():

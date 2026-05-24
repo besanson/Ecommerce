@@ -70,6 +70,26 @@ class TraceStore:
             trace_id=record.trace_id,
         )
 
+    def record_thought(self, *, scenario_id: str, actor: str, topic: str, content: str) -> TraceEvent:
+        return self.record_event(
+            scenario_id=scenario_id,
+            event_type="agent_thought",
+            actor=actor,
+            summary=content,
+            detail={"topic": topic, "content": content},
+        )
+
+    def record_mcp(self, *, scenario_id: str, message) -> TraceEvent:
+        # `message` is a gacct.mcp.messages.MCPMessage; avoid the import cycle by duck-typing.
+        return self.record_event(
+            scenario_id=scenario_id,
+            event_type="mcp_message",
+            actor=message.sender,
+            summary=message.short(),
+            detail=json.loads(message.model_dump_json()),
+        )
+
+
     # ---- reads -----------------------------------------------------------
 
     def events_for(self, scenario_id: str) -> List[TraceEvent]:

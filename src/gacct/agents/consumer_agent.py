@@ -1,51 +1,64 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import Callable, List, Optional
 
 from gacct.agents.retailer_agent import RetailerAgent
 from gacct.domain.actions import ActionType, ProposedAction
 from gacct.domain.consumer import ShoppingDelegation
 from gacct.domain.product import ProductOffer
 from gacct.governance.engine import GovernanceEngine, GovernedOutcome
+from gacct.mcp.transport import MCPTransport
+from gacct.reasoning.engine import ConsumerAgentReasoner, Thought
 
 
 @dataclass
 class ConsumerAgent:
     """A simulated personal shopping agent.
 
-    The agent's contract: every consequential step is proposed via the
-    governance engine. There is no direct path to retailer side effects.
-    Reasoning over offers (filtering, ranking) is intentionally outside the
-    governance boundary — only the action of acting on a choice is governed.
+    Three responsibilities, kept separate:
+      * **Reasoning** — a `ConsumerAgentReasoner` produces thoughts based on
+        the delegation and incoming facts. Reasoning never has authority to
+        act; it informs which `ProposedAction` to construct next.
+      * **Agent-to-agent communication** — an `MCPTransport` carries calls to
+        retailer-side tools. Every request and response is logged as an MCP
+        message and persisted to the trace.
+      * **Action** — every consequential operation is wrapped in
+        `engine.govern(...)`. The consumer agent does *not* call retailer
+        side effects directly; it passes the MCP call as a `side_effect`
+        callable into the engine, and the engine decides whether to invoke it.
     """
 
     name: str
     delegation: ShoppingDelegation
     engine: GovernanceEngine
+    transport: MCPTransport
+    reasoner: ConsumerAgentReasoner
+    on_thought: Optional[Callable[[Thought], None]] = None
 
-    # -- Pure cognition (not governed) -------------------------------------
+    # -- thought emission --------------------------------------------------
 
-    def shortlist(self, offers: List[ProductOffer]) -> List[ProductOffer]:
-        """Local ranking heuristic. Not governed: nothing leaves the agent.
+    def _emit_thoughts(self, thoughts: List[Thought]) -> None:
+        if not self.on_thought:
+            return
+        for t in thoughts:
+            self.on_thought(t)
 
-        The agent applies its own feasibility filter (forbidden materials, in
-        stock) before ranking. This is a courtesy, not a control: the same
-        constraints are independently enforced by the materials policy pack
-        at action time, so a buggy or adversarial agent cannot bypass them.
-        """
+    # -- MCP helpers -------------------------------------------------------
 
-        forbidden = {m.lower() for m in self.delegation.forbidden_materials}
-        feasible = [
-            o for o in offers
-            if o.in_stock and not (set(m.lower() for m in o.materials) & forbidden)
-        ]
-        return sorted(feasible, key=lambda o: (o.total_eur, o.shipping_days))
+    def _mcp(self, retailer: RetailerAgent, method: str, **params):
+        return self.transport.call(
+            sender=self.name,
+            receiver=retailer.retailer_id,
+            method=method,
+            params=params,
+        )
 
-    # -- Governed action wrappers ------------------------------------------
+    # -- Governed actions --------------------------------------------------
 
     def select_merchant(self, *, scenario_id: str, retailer_id: str) -> GovernedOutcome:
+        self._emit_thoughts(self.reasoner.think_about_merchant(retailer_id))
         action = ProposedAction(
             action_id=str(uuid.uuid4()),
             delegation_id=self.delegation.delegation_id,
@@ -64,6 +77,7 @@ class ConsumerAgent:
     def share_consumer_data(
         self, *, scenario_id: str, retailer: RetailerAgent, fields: List[str]
     ) -> GovernedOutcome:
+        self._emit_thoughts(self.reasoner.think_about_data_request(fields))
         action = ProposedAction(
             action_id=str(uuid.uuid4()),
             delegation_id=self.delegation.delegation_id,
@@ -87,6 +101,7 @@ class ConsumerAgent:
         substitute: ProductOffer,
         original: ProductOffer,
     ) -> GovernedOutcome:
+        self._emit_thoughts(self.reasoner.think_about_substitute(original, substitute))
         action = ProposedAction(
             action_id=str(uuid.uuid4()),
             delegation_id=self.delegation.delegation_id,
@@ -112,6 +127,7 @@ class ConsumerAgent:
     def accept_return_terms(
         self, *, scenario_id: str, offer: ProductOffer
     ) -> GovernedOutcome:
+        self._emit_thoughts(self.reasoner.think_about_return_terms(offer))
         action = ProposedAction(
             action_id=str(uuid.uuid4()),
             delegation_id=self.delegation.delegation_id,
@@ -158,29 +174,6 @@ class ConsumerAgent:
             condition_check=condition_check,
         )
 
-    def upgrade_shipping(
-        self, *, scenario_id: str, upgraded_offer: ProductOffer
-    ) -> GovernedOutcome:
-        action = ProposedAction(
-            action_id=str(uuid.uuid4()),
-            delegation_id=self.delegation.delegation_id,
-            agent_name=self.name,
-            action_type=ActionType.UPGRADE_SHIPPING,
-            payload={
-                "sku": upgraded_offer.sku,
-                "target_shipping_days": upgraded_offer.shipping_days,
-                "new_total_eur": upgraded_offer.total_eur,
-            },
-            reversible=True,
-            rationale="upgrading shipping to meet delivery deadline",
-        )
-        return self.engine.govern(
-            scenario_id=scenario_id,
-            delegation=self.delegation,
-            action=action,
-            offer=upgraded_offer,
-        )
-
     def place_order(
         self,
         *,
@@ -203,13 +196,16 @@ class ConsumerAgent:
             reversible=False,
             rationale="placing order for shortlisted offer",
         )
+        # The side_effect is an MCP call: the engine decides whether to invoke it.
+        def _confirm(_a):
+            return self._mcp(retailer, "confirm_order", sku=offer.sku, shared_fields=shared_fields)
         return self.engine.govern(
             scenario_id=scenario_id,
             delegation=self.delegation,
             action=action,
             offer=offer,
             requested_data_fields=shared_fields,
-            side_effect=lambda _a: retailer.confirm_order(offer, shared_fields),
+            side_effect=_confirm,
         )
 
     def use_payment_token(
@@ -233,3 +229,15 @@ class ConsumerAgent:
             delegation=self.delegation,
             action=action,
         )
+
+    # -- High-level reasoning helpers -------------------------------------
+
+    def discover_offers(self, retailer: RetailerAgent, *, shuffle: bool = False) -> List[ProductOffer]:
+        """Query a retailer for offers and reason about them. Not a governed
+        action; this is pure agent-to-agent communication.
+        """
+
+        self._emit_thoughts(self.reasoner.think_about_mission())
+        offers: List[ProductOffer] = self._mcp(retailer, "list_products", max_results=10, shuffle=shuffle)
+        self._emit_thoughts(self.reasoner.think_about_offers(offers))
+        return offers

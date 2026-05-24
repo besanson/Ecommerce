@@ -1,8 +1,11 @@
 """Static fixtures the scripted scenarios share.
 
-The retailer catalogue is intentionally small. Each offer is designed to
-exercise a different governance moment when paired with the standard
-delegation.
+Wires together: the policy engine, the MCP transport, the retailer catalogue,
+the trace store, and the consumer-side reasoner. The same trace store
+receives decision records (from PAA), agent thoughts (from the reasoner),
+and MCP messages (from the transport), so a single sequenced timeline
+captures every reasoning step, every wire message, and every governed
+action.
 """
 
 from __future__ import annotations
@@ -17,10 +20,23 @@ from gacct.domain.consumer import ConsumerProfile, ShoppingDelegation
 from gacct.domain.product import ProductOffer, RetailerTerms
 from gacct.governance.engine import GovernanceEngine
 from gacct.governance.pag import PAGOutcome
+from gacct.mcp.transport import MCPTransport
 from gacct.policy.loader import load_policy_packs
 from gacct.trace.store import TraceStore
 
 POLICIES_DIR = Path(__file__).resolve().parents[3] / "policies"
+
+
+# ---------------------------------------------------------------------------
+# Canonical mission texts, used both as fixture inputs and as on-screen prompts
+# ---------------------------------------------------------------------------
+
+DEFAULT_MISSION_TEXT = (
+    "Buy running shoes for a half marathon within 180 EUR, from approved retailers "
+    "only, no leather products, delivery within 3 days, substitution only within 10 "
+    "percent price variance, no auto-purchase above 150 EUR, and no sharing of "
+    "personal data beyond shipping details and payment token."
+)
 
 
 def build_consumer_profile() -> ConsumerProfile:
@@ -34,6 +50,8 @@ def build_consumer_profile() -> ConsumerProfile:
 
 
 def build_consumer_delegation() -> ShoppingDelegation:
+    # Used by tests and the UI's static "default" view. Mirrors the canonical
+    # mission text above.
     return ShoppingDelegation(
         delegation_id="delegation:half-marathon-shoes",
         consumer_id="consumer:eva",
@@ -60,7 +78,7 @@ def _terms(return_days: int, discount: float = 0.0, requires=None) -> RetailerTe
     )
 
 
-def build_retailers() -> Dict[str, RetailerAgent]:
+def build_retailers(seed: Optional[int] = None) -> Dict[str, RetailerAgent]:
     return {
         "retailer:run_co": RetailerAgent(
             retailer_id="retailer:run_co",
@@ -103,6 +121,7 @@ def build_retailers() -> Dict[str, RetailerAgent]:
                     terms=_terms(return_days=30),
                 ),
             ],
+            seed=seed,
         ),
         "retailer:trail_works": RetailerAgent(
             retailer_id="retailer:trail_works",
@@ -121,13 +140,14 @@ def build_retailers() -> Dict[str, RetailerAgent]:
                     terms=_terms(return_days=30),
                 ),
             ],
-            # Note: this retailer asks for more than the consumer allows.
+            # Trail Works asks for more than the consumer's whitelist.
             requires_data_fields=[
                 "shipping_address",
                 "payment_token_id",
                 "phone_number",
                 "marketing_consent",
             ],
+            seed=seed,
         ),
         "retailer:shady_kicks": RetailerAgent(
             retailer_id="retailer:shady_kicks",
@@ -146,6 +166,7 @@ def build_retailers() -> Dict[str, RetailerAgent]:
                     terms=_terms(return_days=3),
                 ),
             ],
+            seed=seed,
         ),
     }
 
@@ -159,4 +180,15 @@ def build_engine(
         packs,
         on_record=trace_store.record_decision,
         approval_resolver=approval_resolver,
+    )
+
+
+def build_transport(
+    trace_store: TraceStore, scenario_id: str
+) -> MCPTransport:
+    """A transport that streams every MCP message into the trace store under
+    the given scenario_id."""
+
+    return MCPTransport(
+        on_message=lambda msg: trace_store.record_mcp(scenario_id=scenario_id, message=msg)
     )

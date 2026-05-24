@@ -2,52 +2,63 @@ from __future__ import annotations
 
 from gacct.agents.consumer_agent import ConsumerAgent
 from gacct.governance.engine import GovernanceEngine
-from gacct.scenarios.fixtures import build_consumer_delegation, build_retailers
+from gacct.intent.parser import parse_consumer_intent
+from gacct.mcp.transport import MCPTransport
+from gacct.reasoning.engine import ConsumerAgentReasoner
+from gacct.scenarios.fixtures import DEFAULT_MISSION_TEXT, build_retailers
 from gacct.trace.store import TraceStore
 
 SCENARIO_ID = "escalation_path"
+MISSION_TEXT = DEFAULT_MISSION_TEXT
 
 
-def run(engine: GovernanceEngine, store: TraceStore) -> None:
-    """Substitute outside tolerance escalates; once approved, order proceeds
-    but the auto-buy threshold then forces a second escalation for payment.
+def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, seed: int = 42) -> None:
+    """Mission begins as happy path. Retailer signals the original SKU is
+    actually low on stock and proposes a +14% substitute via MCP. The
+    substitution + budget packs both ESCALATE; consumer approves; payment
+    on the new total also escalates.
     """
 
-    delegation = build_consumer_delegation()
-    retailers = build_retailers()
-    retailer = retailers["retailer:run_co"]
-    agent = ConsumerAgent(name="agent:eva-shopper", delegation=delegation, engine=engine)
+    parsed = parse_consumer_intent(MISSION_TEXT)
+    delegation = parsed.delegation
 
     store.record_event(
         scenario_id=SCENARIO_ID,
         event_type="mission_opened",
-        actor=agent.name,
+        actor="consumer:eva",
         summary="opening shopping mission",
-        detail={"mission": delegation.mission},
+        detail={
+            "mission_text": MISSION_TEXT,
+            "parsing_trace": parsed.parsing_trace,
+            "delegation": delegation.model_dump(mode="json"),
+        },
     )
 
-    catalogue = retailer.search()
-    original = next(o for o in catalogue if o.sku == "RC-AERO-1")
-    substitute = next(o for o in catalogue if o.sku == "RC-AERO-2")
-    substitute = substitute.model_copy(update={"substitute_for_offer_id": original.offer_id})
+    retailers = build_retailers(seed=seed)
+    retailer = retailers["retailer:run_co"]
+    transport.register(retailer)
 
-    store.record_event(
-        scenario_id=SCENARIO_ID,
-        event_type="offer_received",
-        actor=retailer.retailer_id,
-        summary=(
-            f"original {original.sku} {original.price_eur:.2f} EUR; "
-            f"substitute {substitute.sku} {substitute.price_eur:.2f} EUR"
+    reasoner = ConsumerAgentReasoner(delegation, seed=seed)
+    agent = ConsumerAgent(
+        name="agent:eva-shopper",
+        delegation=delegation,
+        engine=engine,
+        transport=transport,
+        reasoner=reasoner,
+        on_thought=lambda t: store.record_thought(
+            scenario_id=SCENARIO_ID, actor="agent:eva-shopper", topic=t.topic, content=t.content
         ),
-        detail={"original_sku": original.sku, "substitute_sku": substitute.sku},
     )
+
+    offers = agent.discover_offers(retailer)
+    original = next(o for o in offers if o.sku == "RC-AERO-1")
+
+    # The agent explicitly asks the retailer (over MCP) for a substitute.
+    substitute = agent._mcp(retailer, "propose_substitute", original_sku=original.sku)
+    # In the seeded fixture the chosen substitute is RC-AERO-2 (+14%).
 
     agent.select_merchant(scenario_id=SCENARIO_ID, retailer_id=retailer.retailer_id)
-
-    # Substitute is +14.4% — outside the 10% tolerance -> ESCALATE.
     agent.accept_substitute(scenario_id=SCENARIO_ID, substitute=substitute, original=original)
-
-    # Even though the substitute is approved, total 159 + 6 = 165 EUR > 150 EUR auto-buy → ESCALATE again.
     agent.accept_return_terms(scenario_id=SCENARIO_ID, offer=substitute)
     agent.share_consumer_data(
         scenario_id=SCENARIO_ID,
@@ -69,7 +80,7 @@ def run(engine: GovernanceEngine, store: TraceStore) -> None:
     store.record_event(
         scenario_id=SCENARIO_ID,
         event_type="scenario_completed",
-        actor=agent.name,
+        actor="agent:eva-shopper",
         summary="escalation path complete",
         detail={"final_offer": substitute.sku, "total_eur": substitute.total_eur},
     )
