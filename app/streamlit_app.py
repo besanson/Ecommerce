@@ -37,7 +37,105 @@ from gacct.intent.parser import parse_consumer_intent  # noqa: E402
 from gacct.scenarios.fixtures import DEFAULT_MISSION_TEXT, build_consumer_delegation  # noqa: E402
 from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
-from narrative import SCENARIO_BRIEFS, brief, pillar_tags  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Scenario briefs and pillar tagging — inlined to avoid the recurring
+# Streamlit-Cloud caching problem with sibling modules under app/.
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass  # noqa: E402
+
+
+@dataclass
+class ScenarioBrief:
+    title: str
+    subtitle: str
+    what_to_watch: str
+    expected_outcome: str
+
+
+ACTION_PILLAR_TAGS: Dict[str, list] = {
+    # Shopping-domain actions
+    "select_merchant":     ["AGENTIC", "GOVERNANCE"],
+    "accept_substitute":   ["AGENTIC", "GOVERNANCE"],
+    "accept_return_terms": ["GOVERNANCE"],
+    "share_consumer_data": ["DATA", "GOVERNANCE"],
+    "apply_promotion":     ["AGENTIC", "DATA", "GOVERNANCE"],
+    "upgrade_shipping":    ["AGENTIC", "GOVERNANCE"],
+    "place_order":         ["AGENTIC", "GOVERNANCE"],
+    "use_payment_token":   ["GOVERNANCE"],
+    # Subscription-domain actions — every one depends on a fresh ConsumerContext.
+    "renew_subscription":  ["AGENTIC", "DATA", "GOVERNANCE"],
+    "cancel_subscription": ["AGENTIC", "GOVERNANCE"],
+    "accept_terms_change": ["DATA", "GOVERNANCE"],
+    "share_billing_data":  ["DATA", "GOVERNANCE"],
+}
+
+
+def pillar_tags(action_type: str) -> list:
+    return ACTION_PILLAR_TAGS.get(action_type, [])
+
+
+SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
+    "happy_path": ScenarioBrief(
+        title="Happy path",
+        subtitle="Mission parsed · approved retailer · compliant product · within budget",
+        what_to_watch=(
+            "Walk through the agent's reasoning, then the MCP calls to the retailer, "
+            "then every governed action. Every decision returns ALLOW; the retailer's "
+            "confirm_order tool runs only after the engine authorizes it."
+        ),
+        expected_outcome="5 governed actions, all ALLOW. Order is placed; payment token used.",
+    ),
+    "escalation_path": ScenarioBrief(
+        title="Escalation path",
+        subtitle="Substitute outside tolerance · total above auto-buy threshold",
+        what_to_watch=(
+            "The agent asks the retailer for a substitute via MCP. Reasoning predicts "
+            "two escalations (substitution variance + budget). The scripted approval "
+            "policy approves; order completes at €165."
+        ),
+        expected_outcome="Multiple ESCALATE verdicts; consumer approves; order completes.",
+    ),
+    "blocked_path": ScenarioBrief(
+        title="Blocked path",
+        subtitle="Denied retailer · excess data sharing · weak return terms",
+        what_to_watch=(
+            "Three independent governance failures. Each is preceded by reasoning that "
+            "explicitly predicts the BLOCK, and each fails on a different policy. "
+            "confirm_order is never invoked over MCP."
+        ),
+        expected_outcome="3 BLOCK verdicts. No order. No data shared.",
+    ),
+    "conditional_path": ScenarioBrief(
+        title="Allow-with-conditions path",
+        subtitle="Loyalty promotion · requires marketing consent",
+        what_to_watch=(
+            "Promotion would reduce total but requires marketing_consent. PAG returns "
+            "ALLOW_WITH_CONDITIONS; the consumer's explicit opt-in flag is what ATM "
+            "checks at execute time."
+        ),
+        expected_outcome="1 ALLOW_WITH_CONDITIONS; condition met; order completes.",
+    ),
+    "subscription_renewal": ScenarioBrief(
+        title="Subscription renewal · seven moments",
+        subtitle="Three pillars side-by-side — agentic action · curated data · governance",
+        what_to_watch=(
+            "An end-to-end portfolio renewal exercising all three pillars. Each row "
+            "in the ledger carries [AGENTIC] [DATA] [GOVERNANCE] tags showing which "
+            "pillar(s) the moment demonstrates. The final row is BLOCK_MISSING_CONTEXT "
+            "— the data foundation is itself a governance precondition."
+        ),
+        expected_outcome=(
+            "7 governance moments: 1 ALLOW, 1 ALLOW_WITH_CONDITIONS, 2 BLOCK, 2 "
+            "ESCALATE, 1 BLOCK_MISSING_CONTEXT. context_version pinned on every record."
+        ),
+    ),
+}
+
+
+def brief(scenario_id: str) -> Optional[ScenarioBrief]:
+    return SCENARIO_BRIEFS.get(scenario_id)
 
 
 REPO_ROOT = _APP_DIR.parent
