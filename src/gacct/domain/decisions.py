@@ -12,6 +12,10 @@ class Decision(str, Enum):
     BLOCK = "block"
     ESCALATE = "escalate"
     ALLOW_WITH_CONDITIONS = "allow_with_conditions"
+    # Pre-PAG verdict — the data foundation is missing or stale so the action
+    # cannot even be evaluated. Issued by gacct.domain.context.DataContextValidator
+    # before the engine is engaged. Rules never return this value.
+    BLOCK_MISSING_CONTEXT = "block_missing_context"
 
 
 class DecisionRecord(BaseModel):
@@ -44,3 +48,9 @@ class DecisionRecord(BaseModel):
     execution_outcome: str
     reversible_flag: bool
     conditions: List[str] = Field(default_factory=list)
+    # Data-foundation provenance: which ConsumerContext snapshot was active
+    # when this action was decided. Populated by PAA pass-through from the
+    # ProposedAction; optional so existing scenarios that don't carry a
+    # ConsumerContext continue to work unchanged.
+    context_id: Optional[str] = None
+    context_version: Optional[int] = None

@@ -50,13 +50,46 @@ Forensics view (Streamlit)
 | `gacct.scenarios` | Scripted demo paths + a CLI runner | Generates `examples/traces/*.jsonl` |
 | `app/streamlit_app.py` | Operator UI — five sections | Read-only over traces |
 
+## Data curation layer
+
+Before any SARC stage runs, the agent's data foundation must itself be complete and fresh. The data curation layer makes this explicit.
+
+**`ConsumerContext`** (`gacct.domain.context`) is the structured, versioned data foundation an agent depends on. It carries two halves:
+
+- `delegation_parameters` — the bounded authority the consumer has granted (budget ceilings, auto-renew thresholds, approved-service lists with a version timestamp, billing-data whitelists, substitution tolerances).
+- `data_baseline` — the agent's last-known facts about the world (e.g. last-confirmed monthly prices, last-confirmed billing periods). These are the facts the agent reasons over when it proposes an action.
+
+`context_version` is a monotone integer that increments whenever any baseline field is updated. Every `ProposedAction` carries `context_id + context_version`, and `PostActionAudit` passes these through to the resulting `DecisionRecord`. The audit trail therefore proves *which* data snapshot was active when each decision was made.
+
+**`DataContextValidator`** (`gacct.domain.context`) is a pre-PAG gate. For every consequential action type it lists the keys the `ConsumerContext` must carry to be governable. If the context is missing required fields — for example a `renew_subscription` proposal whose context omits `approved_services_version` — the validator returns the new verdict `Decision.BLOCK_MISSING_CONTEXT` with the structured list of missing fields. PAG is never engaged for that action; the resulting `DecisionRecord` records `pag_status = "not_reached"`, the missing-fields list, and the context version that failed validation.
+
+Why this is a governance moment and not a developer error:
+
+- **Stale or incomplete context is itself a governance failure mode.** A capable agent operating against a partial baseline will produce confident but wrong actions. The control plane must refuse rather than silently allow.
+- **It makes the data dependency auditable.** When a BLOCK_MISSING_CONTEXT decision is written into the trace, a reviewer can see exactly which fields were missing, on which context version, for which proposed action.
+- **It keeps the agentic and governance pillars honest about pillar 2.** Without the validator, the demo would let agentic capability + runtime governance claim the win whenever the data happens to be fresh; with the validator, the data foundation is forced into the same audit surface.
+
+The architecture flow including this stage:
+
+```
+ProposedAction
+   │
+   ▼
+DataContextValidator                 ← pre-PAG gate (pillar 2)
+   ├─ context complete & fresh  → continue to PAG
+   └─ context missing fields    → BLOCK_MISSING_CONTEXT, record, stop
+   │
+   ▼
+PAG → ATM → PAA                      ← SARC governance (pillar 3)
+```
+
 ## SARC mapping
 
 | SARC stage | Implementation | Output |
 | --- | --- | --- |
 | Pre-Action Gate | `gacct/governance/pag.py` | `PAGOutcome` with combined Decision, per-rule verdicts, packs evaluated, facts used |
 | Action-Time Monitor | `gacct/governance/atm.py` | `ATMState` with `aborted`, `abort_reason`, `approval_outcome`, `conditions_satisfied` |
-| Post-Action Audit | `gacct/governance/paa.py` | `DecisionRecord` (persisted to trace store) |
+| Post-Action Audit | `gacct/governance/paa.py` | `DecisionRecord` (persisted to trace store; includes `context_id` and `context_version`) |
 
 The engine wires these together. The flow is fixed; agents and scenarios cannot reorder it.
 

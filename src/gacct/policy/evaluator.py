@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from gacct.domain.actions import ActionType, ProposedAction
 from gacct.domain.consumer import ShoppingDelegation
+from gacct.domain.context import ConsumerContext
 from gacct.domain.decisions import Decision
 from gacct.domain.policies import PolicyPack, PolicyRule
 from gacct.domain.product import ProductOffer
@@ -17,14 +18,20 @@ class EvaluationContext:
     The evaluator never reaches outside this object for state. Missing or
     None facts cause the relevant rule to default-deny (BLOCK or ESCALATE
     per the rule's on_violation).
+
+    `delegation` carries shopping-domain authority; `consumer_context`
+    carries the broader, versioned data foundation (subscription baselines,
+    approved-service lists, billing-data whitelists). Either or both can be
+    supplied — rule handlers pick the source relevant to their action type.
     """
 
-    delegation: ShoppingDelegation
-    action: ProposedAction
+    delegation: Optional[ShoppingDelegation] = None
+    action: Optional[ProposedAction] = None
     offer: Optional[ProductOffer] = None
     original_offer: Optional[ProductOffer] = None
     requested_data_fields: List[str] = field(default_factory=list)
     extras: Dict[str, Any] = field(default_factory=dict)
+    consumer_context: Optional[ConsumerContext] = None
 
 
 @dataclass
@@ -235,6 +242,201 @@ def _promotion_without_extra_data_sharing(rule, ctx):
         else "promotion requires no extra data fields"
     ), {
         "requested_fields": sorted(set(requested)),
+        "extra_fields": extra,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Subscription-domain rule handlers
+# ---------------------------------------------------------------------------
+
+
+def _consumer_context(ctx: "EvaluationContext"):
+    """Resolve the ConsumerContext from the explicit field or from extras.
+
+    Callers that build an EvaluationContext directly can set
+    `consumer_context=`. The engine (which we deliberately do not modify)
+    propagates extras as a dict; we accept `extras['consumer_context']` too.
+    """
+
+    if ctx.consumer_context is not None:
+        return ctx.consumer_context
+    return ctx.extras.get("consumer_context") if ctx.extras else None
+
+
+def _ctx_get(ctx: "EvaluationContext", *path: str, default=None):
+    """Read a key from the ConsumerContext, falling back to action payload."""
+
+    cc = _consumer_context(ctx)
+    if cc is not None:
+        v = cc.get(*path)
+        if v is not None:
+            return v
+    if ctx.action is not None and len(path) == 1:
+        return ctx.action.payload.get(path[0], default)
+    return default
+
+
+@_handler("monthly_under_block_ceiling")
+def _monthly_under_block_ceiling(rule, ctx):
+    monthly = ctx.action.payload.get("monthly_eur") if ctx.action else None
+    ceiling = _ctx_get(ctx, "monthly_block_threshold")
+    if monthly is None or ceiling is None:
+        return False, "missing monthly_eur or monthly_block_threshold; defaulting to deny", {
+            "monthly_eur": monthly, "monthly_block_threshold": ceiling,
+        }
+    ok = monthly <= ceiling
+    return ok, f"monthly €{monthly:.2f} {'≤' if ok else '>'} block ceiling €{ceiling:.2f}", {
+        "monthly_eur": monthly, "monthly_block_threshold": ceiling,
+    }
+
+
+@_handler("monthly_under_escalate_threshold")
+def _monthly_under_escalate_threshold(rule, ctx):
+    monthly = ctx.action.payload.get("monthly_eur") if ctx.action else None
+    threshold = _ctx_get(ctx, "monthly_escalate_threshold")
+    if monthly is None or threshold is None:
+        return False, "missing monthly_eur or monthly_escalate_threshold; defaulting to deny", {
+            "monthly_eur": monthly, "monthly_escalate_threshold": threshold,
+        }
+    ok = monthly <= threshold
+    return ok, f"monthly €{monthly:.2f} {'≤' if ok else '>'} auto-renew threshold €{threshold:.2f}", {
+        "monthly_eur": monthly, "monthly_escalate_threshold": threshold,
+    }
+
+
+@_handler("billing_period_unchanged_or_accepted")
+def _billing_period_unchanged_or_accepted(rule, ctx):
+    if ctx.action is None:
+        return False, "missing action; defaulting to deny", {}
+    proposed = ctx.action.payload.get("billing_period")
+    service = ctx.action.payload.get("service")
+    accepted = bool(ctx.action.payload.get("period_change_accepted", False))
+    baseline = None
+    cc = _consumer_context(ctx)
+    if cc and service:
+        subs = cc.data_baseline.get("subscriptions", {})
+        baseline = subs.get(service, {}).get("billing_period")
+    if proposed is None or baseline is None:
+        # If we can't compare, treat as unchanged.
+        return True, "no billing_period change detected", {
+            "proposed_billing_period": proposed, "baseline_billing_period": baseline,
+        }
+    if proposed == baseline:
+        return True, f"billing period unchanged ({proposed})", {
+            "proposed_billing_period": proposed, "baseline_billing_period": baseline,
+        }
+    if accepted:
+        return True, f"billing period changed {baseline}→{proposed} and consumer accepted", {
+            "proposed_billing_period": proposed, "baseline_billing_period": baseline,
+            "period_change_accepted": True,
+        }
+    return False, (
+        f"billing period changed {baseline}→{proposed} without period_change_accepted"
+    ), {
+        "proposed_billing_period": proposed, "baseline_billing_period": baseline,
+        "period_change_accepted": False,
+    }
+
+
+def _price_change(ctx) -> tuple:
+    """Return (current_eur, baseline_eur, increase_pct) or (None, None, None) if data missing."""
+
+    if ctx.action is None:
+        return None, None, None
+    service = ctx.action.payload.get("service")
+    current = ctx.action.payload.get("monthly_eur")
+    baseline = None
+    cc = _consumer_context(ctx)
+    if cc and service:
+        subs = cc.data_baseline.get("subscriptions", {})
+        baseline = subs.get(service, {}).get("monthly_eur")
+    if current is None or baseline is None:
+        return current, baseline, None
+    if baseline <= 0:
+        return current, baseline, None
+    pct = (current - baseline) / baseline
+    return current, baseline, pct
+
+
+@_handler("price_increase_under_threshold")
+def _price_increase_under_threshold(rule, ctx):
+    current, baseline, pct = _price_change(ctx)
+    threshold = float(rule.params.get("threshold_pct", 0.10))
+    if pct is None:
+        return True, "no comparable baseline price; treating as no increase", {
+            "current_eur": current, "baseline_eur": baseline,
+        }
+    ok = pct <= threshold
+    return ok, (
+        f"price increase {pct:+.1%} {'≤' if ok else '>'} threshold {threshold:.0%}"
+    ), {
+        "current_eur": current, "baseline_eur": baseline,
+        "increase_pct": round(pct, 4), "threshold_pct": threshold,
+    }
+
+
+@_handler("price_increase_within_threshold_with_logging")
+def _price_increase_within_threshold_with_logging(rule, ctx):
+    current, baseline, pct = _price_change(ctx)
+    threshold = float(rule.params.get("threshold_pct", 0.10))
+    if pct is None or pct <= 0:
+        return True, "no positive price drift to log", {
+            "current_eur": current, "baseline_eur": baseline, "increase_pct": pct,
+        }
+    if pct > threshold:
+        # The larger-drift rule (above) already escalates; this rule stays neutral.
+        return True, "drift exceeds tolerance; handled by the escalate rule", {
+            "current_eur": current, "baseline_eur": baseline, "increase_pct": pct,
+        }
+    # Positive drift within tolerance — require the log condition.
+    return False, (
+        f"positive drift {pct:+.1%} within tolerance — proceed only with log_price_drift condition"
+    ), {
+        "current_eur": current, "baseline_eur": baseline,
+        "increase_pct": round(pct, 4), "threshold_pct": threshold,
+    }
+
+
+@_handler("service_not_in_blocklist")
+def _service_not_in_blocklist(rule, ctx):
+    service = ctx.action.payload.get("service") if ctx.action else None
+    blocklist = set(_ctx_get(ctx, "blocked_services") or [])
+    if not service:
+        return False, "missing service identifier; defaulting to deny", {"service": service}
+    ok = service not in blocklist
+    return ok, f"service {service!r} {'not on' if ok else 'on'} blocklist", {
+        "service": service, "blocklist": sorted(blocklist),
+    }
+
+
+@_handler("service_in_approved_list")
+def _service_in_approved_list(rule, ctx):
+    service = ctx.action.payload.get("service") if ctx.action else None
+    approved = set(_ctx_get(ctx, "approved_services") or [])
+    if not service:
+        return False, "missing service identifier; defaulting to deny", {"service": service}
+    ok = service in approved
+    return ok, f"service {service!r} {'in' if ok else 'not in'} approved list", {
+        "service": service, "approved_services": sorted(approved),
+    }
+
+
+@_handler("billing_data_fields_within_whitelist")
+def _billing_data_fields_within_whitelist(rule, ctx):
+    requested = list(ctx.action.payload.get("data_fields_requested", [])) if ctx.action else []
+    if not requested:
+        return True, "no billing-data fields requested", {"requested_fields": []}
+    whitelist = set(_ctx_get(ctx, "billing_data_whitelist") or [])
+    extra = sorted(set(requested) - whitelist)
+    ok = not extra
+    return ok, (
+        f"billing-data request includes fields outside whitelist: {extra}"
+        if not ok
+        else "all billing-data fields within whitelist"
+    ), {
+        "requested_fields": sorted(set(requested)),
+        "billing_data_whitelist": sorted(whitelist),
         "extra_fields": extra,
     }
 

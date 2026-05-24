@@ -21,6 +21,31 @@ class ScenarioBrief:
     expected_outcome: str
 
 
+# Per-action pillar tags. The three-pillar thesis is visible in the UI's
+# ledger via these tags. Each entry: ActionType.value -> list of pillar tags.
+ACTION_PILLAR_TAGS: Dict[str, list] = {
+    # Shopping-domain actions
+    "select_merchant":     ["AGENTIC", "GOVERNANCE"],
+    "accept_substitute":   ["AGENTIC", "GOVERNANCE"],
+    "accept_return_terms": ["GOVERNANCE"],
+    "share_consumer_data": ["DATA", "GOVERNANCE"],
+    "apply_promotion":     ["AGENTIC", "DATA", "GOVERNANCE"],
+    "upgrade_shipping":    ["AGENTIC", "GOVERNANCE"],
+    "place_order":         ["AGENTIC", "GOVERNANCE"],
+    "use_payment_token":   ["GOVERNANCE"],
+    # Subscription-domain actions — every one of these depends on the
+    # ConsumerContext baseline being fresh, so all carry the DATA tag.
+    "renew_subscription":  ["AGENTIC", "DATA", "GOVERNANCE"],
+    "cancel_subscription": ["AGENTIC", "GOVERNANCE"],
+    "accept_terms_change": ["DATA", "GOVERNANCE"],
+    "share_billing_data":  ["DATA", "GOVERNANCE"],
+}
+
+
+def pillar_tags(action_type: str) -> list:
+    return ACTION_PILLAR_TAGS.get(action_type, [])
+
+
 SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
     "happy_path": ScenarioBrief(
         title="Happy path",
@@ -61,6 +86,20 @@ SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
             "checks at execute time."
         ),
         expected_outcome="1 ALLOW_WITH_CONDITIONS; condition met; order completes.",
+    ),
+    "subscription_renewal": ScenarioBrief(
+        title="Subscription renewal · seven moments",
+        subtitle="Three pillars side-by-side — agentic action · curated data · governance",
+        what_to_watch=(
+            "An end-to-end portfolio renewal exercising all three pillars. Each row "
+            "in the ledger carries [AGENTIC] [DATA] [GOVERNANCE] tags showing which "
+            "pillar(s) the moment demonstrates. The final row is BLOCK_MISSING_CONTEXT "
+            "— the data foundation is itself a governance precondition."
+        ),
+        expected_outcome=(
+            "7 governance moments: 1 ALLOW, 1 ALLOW_WITH_CONDITIONS, 2 BLOCK, 2 "
+            "ESCALATE, 1 BLOCK_MISSING_CONTEXT. context_version pinned on every record."
+        ),
     ),
 }
 

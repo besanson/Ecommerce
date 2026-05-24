@@ -37,7 +37,7 @@ from gacct.intent.parser import parse_consumer_intent  # noqa: E402
 from gacct.scenarios.fixtures import DEFAULT_MISSION_TEXT, build_consumer_delegation  # noqa: E402
 from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
-from narrative import SCENARIO_BRIEFS, brief  # noqa: E402
+from narrative import SCENARIO_BRIEFS, brief, pillar_tags  # noqa: E402
 
 
 REPO_ROOT = _APP_DIR.parent
@@ -57,18 +57,27 @@ DECISION_COLORS = {
     "allow_with_conditions": C_COND,
     "escalate": C_ESC,
     "block": C_BLOCK,
+    "block_missing_context": "#6a1b9a",  # purple-ish: data-foundation failure
 }
 DECISION_LABELS = {
     "allow": "ALLOWED",
     "allow_with_conditions": "ALLOWED · WITH CONDITIONS",
     "escalate": "REQUIRES CONSUMER APPROVAL",
     "block": "BLOCKED BY POLICY",
+    "block_missing_context": "BLOCKED · DATA CONTEXT MISSING",
 }
 DECISION_SHORT = {
     "allow": "Allowed",
     "allow_with_conditions": "Conditional",
     "escalate": "Escalated",
     "block": "Blocked",
+    "block_missing_context": "Data missing",
+}
+
+PILLAR_COLORS = {
+    "AGENTIC": "#1565c0",
+    "DATA": "#5e35b1",
+    "GOVERNANCE": "#37474f",
 }
 
 
@@ -103,6 +112,8 @@ def _scenario_aggregate_state(events: List[dict]) -> str:
     """Whole-scenario tone: blocked > escalated > conditional > allowed."""
 
     decisions = {e["detail"]["decision"] for e in _decision_events(events)}
+    if "block_missing_context" in decisions:
+        return "block_missing_context"
     if "block" in decisions:
         return "block"
     if "escalate" in decisions:
@@ -325,7 +336,14 @@ def _scenario_edge_summary(events: List[dict]) -> Dict[Tuple[str, str], str]:
     Returns: {(src, dst): color}
     """
 
-    severity = {"block": 4, "escalate": 3, "allow_with_conditions": 2, "allow": 1, "neutral": 0}
+    severity = {
+        "block_missing_context": 5,
+        "block": 4,
+        "escalate": 3,
+        "allow_with_conditions": 2,
+        "allow": 1,
+        "neutral": 0,
+    }
     out: Dict[Tuple[str, str], str] = {}
 
     def bump(s: str, t: str, decision: str) -> None:
@@ -374,7 +392,9 @@ def _selected_edge_color(selected: Optional[dict]) -> Tuple[Dict[Tuple[str, str]
     action_type = d["intended_action"]
     target = "retailer_agent" if action_type != "use_payment_token" else "payment_boundary"
     path = [("consumer", "consumer_agent"), ("consumer_agent", "governance"), ("governance", "trace_store")]
-    if decision == "block":
+    if decision in ("block", "block_missing_context"):
+        # block_missing_context: governance was never engaged; show only the
+        # data-foundation refusal path.
         pass
     elif decision == "escalate":
         path += [("governance", "approval"), ("approval", "governance")]
@@ -540,7 +560,13 @@ def render_mission_status_banner(events: List[dict]) -> None:
     allowed = sum(1 for r in records if r.decision.value in ("allow", "allow_with_conditions"))
     blocked = sum(1 for r in records if r.decision.value == "block")
     esc = sum(1 for r in records if r.decision.value == "escalate")
-    if state == "block":
+    missing_ctx = sum(1 for r in records if r.decision.value == "block_missing_context")
+    if state == "block_missing_context" or missing_ctx > 0:
+        cls, msg = "status-block", (
+            f"Data foundation gap · {missing_ctx} action(s) refused before PAG (ConsumerContext incomplete). "
+            f"{blocked} additional action(s) blocked by policy. Data completeness is itself a governance precondition."
+        )
+    elif state == "block":
         cls, msg = "status-block", (
             f"Policy conflict detected · {blocked} action(s) blocked of {n} attempted. "
             "No order placed; consumer data preserved."
@@ -588,22 +614,29 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
     rows = []
     for i, e in enumerate(decisions):
         d = e["detail"]
+        tags = pillar_tags(d["intended_action"])
         rows.append({
             "Time": d["timestamp"].split("T")[1][:8] if "T" in d["timestamp"] else d["timestamp"][:8],
+            "Pillars": " · ".join(tags) if tags else "—",
             "Actor": d["actor"],
             "On behalf of": d["acting_on_behalf_of"],
             "Intended action": d["intended_action"],
-            "Decision": DECISION_SHORT[d["decision"]],
+            "Decision": DECISION_SHORT.get(d["decision"], d["decision"]),
             "Policy applied": d.get("policy_id") or "—",
             "Approval": "required · " + (d.get("approval_outcome") or "pending") if d["approval_required"] else "—",
+            "Context": f"v{d.get('context_version')}" if d.get("context_version") is not None else "—",
             "Governance outcome": d["execution_outcome"][:80],
             "_decision_raw": d["decision"],
         })
     df = pd.DataFrame(rows)
 
+    _DEC_RAW = {
+        "Allowed": "allow", "Conditional": "allow_with_conditions",
+        "Escalated": "escalate", "Blocked": "block", "Data missing": "block_missing_context",
+    }
+
     def _color_decision(val):
-        col = DECISION_COLORS.get({"Allowed": "allow", "Conditional": "allow_with_conditions",
-                                   "Escalated": "escalate", "Blocked": "block"}.get(val, ""), "#90a4ae")
+        col = DECISION_COLORS.get(_DEC_RAW.get(val, ""), "#90a4ae")
         return f"background-color: {col}; color: white; font-weight: 700; text-align: center;"
 
     styled = (
@@ -646,11 +679,13 @@ def render_cockpit(events: List[dict]) -> None:
         if r.atm_status == "executed" and r.intended_action == "apply_promotion":
             discount += float(r.facts_used.get("promotions.must_reduce_total", {}).get("discount_eur", 0.0))
 
-    cols = st.columns(4)
+    missing_ctx = sum(1 for r in records if r.decision.value == "block_missing_context")
+    cols = st.columns(5)
     cols[0].metric("Actions attempted", attempted)
     cols[1].metric("Allowed", allowed)
     cols[2].metric("Blocked by policy", blocked)
-    cols[3].metric("Required approval", approvals)
+    cols[3].metric("Refused · data missing", missing_ctx, help="Pillar 2: ConsumerContext incomplete; refused before PAG.")
+    cols[4].metric("Required approval", approvals)
 
     cols = st.columns(3)
     cols[0].metric("Escalations triggered", escalated)
@@ -709,7 +744,10 @@ def render_forensics(events: List[dict], selected: dict) -> None:
     # Pipeline + facts + outcome
     cols = st.columns([1.1, 1])
     with cols[0]:
-        pag_cls = {"allow": "on", "block": "bad", "escalate": "warn", "allow_with_conditions": "cond"}[decision]
+        pag_cls = {
+            "allow": "on", "block": "bad", "escalate": "warn",
+            "allow_with_conditions": "cond", "block_missing_context": "bad",
+        }[decision]
         atm_cls = "on" if d["atm_status"] == "executed" else "bad"
         pipe = (
             f'<div class="pipe">'
@@ -901,7 +939,7 @@ def main() -> None:
         f"""
         <div class="hero">
           <h1>Governed Agentic Commerce · Control Tower</h1>
-          <div class="sub">A runtime control plane for delegated commerce. Consumers grant bounded authority to a shopping agent; every consequential action is intercepted by a SARC-style governance layer that allows, blocks, escalates, or conditionally allows it. Every material decision leaves evidence.</div>
+          <div class="sub">Three pillars, equally visible: <span style="color:#7eb6ff;font-weight:700;">AGENTIC</span> — agents can execute a consumer's mission end-to-end; <span style="color:#b39ddb;font-weight:700;">DATA</span> — they do so on a structured, versioned consumer context; <span style="color:#cfd8dc;font-weight:700;">GOVERNANCE</span> — every consequential step is intercepted by a SARC-style runtime layer that allows, blocks, escalates, or conditionally allows it. Every material decision leaves evidence.</div>
           <div class="meta">Scenario: <b>{sb.title if sb else scenario}</b> &nbsp;·&nbsp; {sb.subtitle if sb else ""} &nbsp;·&nbsp; <span style="color:{accent}; font-weight:700;">{DECISION_LABELS.get(state, '').lower()}</span></div>
         </div>
         """,
@@ -954,7 +992,7 @@ def main() -> None:
     st.markdown('<div class="section-h">5 · Decision evidence</div>', unsafe_allow_html=True)
     if selected_event is None and decisions:
         # Auto-select the most "interesting" one: prefer block, then escalate, then conditional, then first.
-        order = {"block": 0, "escalate": 1, "allow_with_conditions": 2, "allow": 3}
+        order = {"block_missing_context": 0, "block": 1, "escalate": 2, "allow_with_conditions": 3, "allow": 4}
         ranked = sorted(range(len(decisions)), key=lambda i: order[decisions[i]["detail"]["decision"]])
         selected_event = decisions[ranked[0]]
         st.caption("Auto-selected the most consequential decision; click any ledger row above to inspect another.")

@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from gacct.agents.retailer_agent import RetailerAgent
+from gacct.agents.subscription_service import SubscriptionServiceAgent
 from gacct.domain.actions import ActionType, ProposedAction
 from gacct.domain.consumer import ShoppingDelegation
+from gacct.domain.context import ConsumerContext, DataContextValidator
+from gacct.domain.decisions import Decision, DecisionRecord
 from gacct.domain.product import ProductOffer
 from gacct.governance.engine import GovernanceEngine, GovernedOutcome
+from gacct.governance.pag import PAGOutcome
 from gacct.mcp.transport import MCPTransport
+from gacct.policy.evaluator import EvaluationContext
 from gacct.reasoning.engine import ConsumerAgentReasoner, Thought
 
 
@@ -36,6 +41,12 @@ class ConsumerAgent:
     transport: MCPTransport
     reasoner: ConsumerAgentReasoner
     on_thought: Optional[Callable[[Thought], None]] = None
+    # Optional data foundation (pillar 2). When supplied, every governed
+    # action carries context_id + context_version and is pre-screened by
+    # the DataContextValidator before reaching PAG.
+    context: Optional[ConsumerContext] = None
+    context_validator: Optional[DataContextValidator] = None
+    on_context_block: Optional[Callable[[DecisionRecord], None]] = None
 
     # -- thought emission --------------------------------------------------
 
@@ -47,10 +58,15 @@ class ConsumerAgent:
 
     # -- MCP helpers -------------------------------------------------------
 
-    def _mcp(self, retailer: RetailerAgent, method: str, **params):
+    def _mcp(self, server, method: str, **params):
+        """Send an MCP request to any registered server (retailer or
+        subscription service). Uses the server's MCP `name`, so the same
+        helper works for both agent classes.
+        """
+
         return self.transport.call(
             sender=self.name,
-            receiver=retailer.retailer_id,
+            receiver=server.name,
             method=method,
             params=params,
         )
@@ -241,3 +257,201 @@ class ConsumerAgent:
         offers: List[ProductOffer] = self._mcp(retailer, "list_products", max_results=10, shuffle=shuffle)
         self._emit_thoughts(self.reasoner.think_about_offers(offers))
         return offers
+
+    # -- Subscription-domain governed actions -----------------------------
+    #
+    # Each subscription method is structurally identical to the shopping
+    # methods above: it constructs a ProposedAction and routes it through
+    # the engine. The differences are (a) it attaches the ConsumerContext
+    # so the data foundation is provenanced on the resulting record, and
+    # (b) it runs the DataContextValidator before reaching PAG so that
+    # actions against an incomplete data baseline are refused outright.
+
+    def _attach_context(self, action: ProposedAction) -> ProposedAction:
+        if self.context is None:
+            return action
+        return action.model_copy(update={
+            "context_id": self.context.context_id,
+            "context_version": self.context.context_version,
+        })
+
+    def _emit_context_block(
+        self, *, scenario_id: str, action: ProposedAction, reason: str, missing: List[str],
+    ) -> DecisionRecord:
+        """Build and persist a synthetic BLOCK_MISSING_CONTEXT decision record.
+
+        This is the only place in the agent that records a decision without
+        engine.govern() — and only because validation precedes the engine.
+        The engine cannot evaluate an action whose data foundation is missing.
+        """
+
+        record = DecisionRecord(
+            trace_id=str(uuid.uuid4()),
+            scenario_id=scenario_id,
+            actor=self.name,
+            acting_on_behalf_of=self.delegation.acting_on_behalf_of,
+            agent_name=self.name,
+            action_id=action.action_id,
+            intended_action=action.action_type.value,
+            action_payload_summary=action.payload_summary(),
+            decision=Decision.BLOCK_MISSING_CONTEXT,
+            rationale=reason,
+            policy_id="data_context_validator",
+            policy_version="1.0.0",
+            policies_evaluated=["data_context_validator"],
+            facts_used={"missing_fields": missing},
+            pag_status="not_reached",
+            atm_status="aborted",
+            paa_status="recorded",
+            approval_required=False,
+            approval_outcome=None,
+            execution_outcome=f"not executed: missing data context ({missing})",
+            reversible_flag=action.reversible,
+            conditions=[],
+            context_id=action.context_id,
+            context_version=action.context_version,
+        )
+        if self.on_context_block is not None:
+            self.on_context_block(record)
+        return record
+
+    def _govern_subscription_action(
+        self,
+        *,
+        scenario_id: str,
+        action: ProposedAction,
+        side_effect: Optional[Callable[[ProposedAction], Any]] = None,
+        evaluation_extras: Optional[Dict[str, Any]] = None,
+        condition_check: Optional[Callable[[ProposedAction], bool]] = None,
+    ) -> GovernedOutcome:
+        """Run the pre-PAG data validation, then route to engine.govern().
+
+        Returns a GovernedOutcome in both cases. When validation fails a
+        synthetic outcome is returned whose DecisionRecord carries the
+        BLOCK_MISSING_CONTEXT verdict; the engine is never engaged.
+        """
+
+        action = self._attach_context(action)
+        if self.context_validator is not None:
+            res = self.context_validator.validate(
+                action_type=action.action_type, context=self.context
+            )
+            if not res.passed:
+                record = self._emit_context_block(
+                    scenario_id=scenario_id, action=action,
+                    reason=res.rationale, missing=res.missing,
+                )
+                return GovernedOutcome(
+                    decision=Decision.BLOCK_MISSING_CONTEXT,
+                    record=record,
+                    pag=PAGOutcome(decision=Decision.BLOCK_MISSING_CONTEXT,
+                                    rationale=res.rationale, verdicts=[],
+                                    packs_evaluated=[], facts={"missing": res.missing}),
+                    atm=None,  # type: ignore[arg-type]  -- aborted before ATM
+                    side_effect_result=None,
+                )
+        return self.engine.govern(
+            scenario_id=scenario_id,
+            delegation=self.delegation,
+            action=action,
+            side_effect=side_effect,
+            condition_check=condition_check,
+            extras={"consumer_context": self.context} if self.context else None,
+        )
+
+    def renew_subscription(
+        self,
+        *,
+        scenario_id: str,
+        service: SubscriptionServiceAgent,
+        monthly_eur: float,
+        billing_period: str,
+        period_change_accepted: bool = False,
+        log_price_drift: bool = False,
+    ) -> GovernedOutcome:
+        action = ProposedAction(
+            action_id=str(uuid.uuid4()),
+            delegation_id=self.delegation.delegation_id,
+            agent_name=self.name,
+            action_type=ActionType.RENEW_SUBSCRIPTION,
+            payload={
+                "service": service.service_id,
+                "monthly_eur": monthly_eur,
+                "billing_period": billing_period,
+                "period_change_accepted": period_change_accepted,
+                "log_price_drift": log_price_drift,
+            },
+            reversible=True,
+            rationale=f"renewing {service.service_id} at €{monthly_eur:.2f}/mo",
+        )
+        def _confirm(_a):
+            return self._mcp(service, "confirm_renewal", service=service.service_id,
+                             shared_fields=["payment_token", "billing_email"])
+        return self._govern_subscription_action(
+            scenario_id=scenario_id, action=action, side_effect=_confirm,
+            condition_check=lambda _a: log_price_drift,
+        )
+
+    def cancel_subscription(
+        self, *, scenario_id: str, service: SubscriptionServiceAgent,
+    ) -> GovernedOutcome:
+        action = ProposedAction(
+            action_id=str(uuid.uuid4()),
+            delegation_id=self.delegation.delegation_id,
+            agent_name=self.name,
+            action_type=ActionType.CANCEL_SUBSCRIPTION,
+            payload={"service": service.service_id},
+            reversible=False,
+            rationale=f"cancelling {service.service_id} after governance refusal",
+        )
+        def _confirm(_a):
+            return self._mcp(service, "cancel_subscription", service=service.service_id)
+        return self._govern_subscription_action(
+            scenario_id=scenario_id, action=action, side_effect=_confirm,
+        )
+
+    def accept_terms_change(
+        self,
+        *,
+        scenario_id: str,
+        service: SubscriptionServiceAgent,
+        new_billing_period: str,
+        monthly_eur: float,
+        period_change_accepted: bool = False,
+    ) -> GovernedOutcome:
+        action = ProposedAction(
+            action_id=str(uuid.uuid4()),
+            delegation_id=self.delegation.delegation_id,
+            agent_name=self.name,
+            action_type=ActionType.ACCEPT_TERMS_CHANGE,
+            payload={
+                "service": service.service_id,
+                "billing_period": new_billing_period,
+                "monthly_eur": monthly_eur,
+                "period_change_accepted": period_change_accepted,
+            },
+            reversible=True,
+            rationale=f"considering terms change on {service.service_id}",
+        )
+        return self._govern_subscription_action(scenario_id=scenario_id, action=action)
+
+    def share_billing_data(
+        self,
+        *,
+        scenario_id: str,
+        service: SubscriptionServiceAgent,
+        data_fields_requested: List[str],
+    ) -> GovernedOutcome:
+        action = ProposedAction(
+            action_id=str(uuid.uuid4()),
+            delegation_id=self.delegation.delegation_id,
+            agent_name=self.name,
+            action_type=ActionType.SHARE_BILLING_DATA,
+            payload={
+                "service": service.service_id,
+                "data_fields_requested": list(data_fields_requested),
+            },
+            reversible=False,
+            rationale=f"considering billing-data share with {service.service_id}",
+        )
+        return self._govern_subscription_action(scenario_id=scenario_id, action=action)

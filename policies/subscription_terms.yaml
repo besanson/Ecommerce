@@ -1,0 +1,35 @@
+pack_id: subscription_terms
+version: "1.0.0"
+title: Subscription terms drift
+description: >
+  Governs renewals when the retailer-side terms have drifted since the data
+  baseline. Price increases within a small percentage are tolerated under
+  an explicit "log the drift" condition; larger increases escalate. Any
+  billing-period change requires explicit consumer acknowledgement.
+applies_to_actions:
+  - renew_subscription
+  - accept_terms_change
+rules:
+  - rule_id: subscription_terms.billing_period_acknowledged
+    kind: billing_period_unchanged_or_accepted
+    description: >
+      Billing period change (e.g. monthly → annual) must be acknowledged
+      by the consumer; otherwise escalate so the consumer can decide.
+    on_violation: escalate
+    params: {}
+  - rule_id: subscription_terms.price_increase_under_threshold
+    kind: price_increase_under_threshold
+    description: >
+      Price increases beyond the drift threshold escalate to the consumer.
+    on_violation: escalate
+    params:
+      threshold_pct: 0.10
+  - rule_id: subscription_terms.log_price_drift
+    kind: price_increase_within_threshold_with_logging
+    description: >
+      Smaller price drifts proceed only under the explicit condition that
+      the baseline price is logged forward.
+    on_violation: allow_with_conditions
+    condition: "log_price_drift"
+    params:
+      threshold_pct: 0.10

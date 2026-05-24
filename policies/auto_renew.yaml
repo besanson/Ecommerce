@@ -1,0 +1,23 @@
+pack_id: auto_renew
+version: "1.0.0"
+title: Auto-renew monthly threshold
+description: >
+  Tiered governance for subscription renewals based on monthly cost.
+  Renewals at or below the auto-renew threshold may execute without
+  approval. Renewals between the auto-renew and block thresholds escalate
+  to the consumer. Renewals above the block threshold are refused outright.
+applies_to_actions:
+  - renew_subscription
+rules:
+  - rule_id: auto_renew.under_block_ceiling
+    kind: monthly_under_block_ceiling
+    description: Monthly cost must not exceed the block ceiling.
+    on_violation: block
+    params: {}
+  - rule_id: auto_renew.under_escalate_threshold
+    kind: monthly_under_escalate_threshold
+    description: >
+      Monthly cost above the auto-renew threshold (but at or below the block
+      ceiling) requires explicit consumer approval.
+    on_violation: escalate
+    params: {}

@@ -1,0 +1,33 @@
+pack_id: approved_services
+version: "1.0.0"
+title: Approved services and billing-data sharing
+description: >
+  Restricts which subscription services the agent may transact with, and
+  caps the consumer data fields the agent may share with a service. A
+  service the consumer has explicitly approved proceeds normally; a service
+  the consumer has explicitly blocked is refused; a service the agent has
+  never seen before is escalated so the consumer can extend authority.
+applies_to_actions:
+  - renew_subscription
+  - cancel_subscription
+  - share_billing_data
+rules:
+  - rule_id: approved_services.not_blocklisted
+    kind: service_not_in_blocklist
+    description: Service must not be on the consumer's blocklist.
+    on_violation: block
+    params: {}
+  - rule_id: approved_services.in_approved_list
+    kind: service_in_approved_list
+    description: >
+      An unknown service (neither approved nor blocked) escalates so the
+      consumer can extend authority before any consequential action.
+    on_violation: escalate
+    params: {}
+  - rule_id: approved_services.billing_data_whitelist
+    kind: billing_data_fields_within_whitelist
+    description: >
+      Billing-data sharing is capped to the consumer's whitelist
+      (typically a payment token reference and a billing email).
+    on_violation: block
+    params: {}

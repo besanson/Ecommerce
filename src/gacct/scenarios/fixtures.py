@@ -14,9 +14,11 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 from gacct.agents.retailer_agent import RetailerAgent
+from gacct.agents.subscription_service import SubscriptionServiceAgent
 from gacct.domain.actions import ProposedAction
 from gacct.domain.approvals import ApprovalOutcome
 from gacct.domain.consumer import ConsumerProfile, ShoppingDelegation
+from gacct.domain.context import ConsumerContext
 from gacct.domain.product import ProductOffer, RetailerTerms
 from gacct.governance.engine import GovernanceEngine
 from gacct.governance.pag import PAGOutcome
@@ -181,6 +183,124 @@ def build_engine(
         on_record=trace_store.record_decision,
         approval_resolver=approval_resolver,
     )
+
+
+# ---------------------------------------------------------------------------
+# Subscription-domain fixtures
+# ---------------------------------------------------------------------------
+
+SUBSCRIPTION_MISSION_TEXT = (
+    "Renew active subscriptions up to 15 EUR/month automatically; escalate "
+    "renewals between 15-30 EUR; block anything above 30 EUR or any "
+    "unapproved new service. No sharing of payment data beyond token and "
+    "billing email. Cancel if renewal terms change billing period without "
+    "my approval."
+)
+
+
+def build_subscription_context(*, with_approved_services_version: bool = True) -> ConsumerContext:
+    """Eva's data foundation for the subscription mission.
+
+    The data_baseline carries the agent's last-known facts. The price for
+    StreamPlus is slightly stale (it has drifted by 10%); the price for
+    MegaBundle is sharply stale (it has jumped well above the block ceiling);
+    AnnualPlus's billing_period on record is monthly even though the service
+    has silently moved to annual. These deliberate mismatches are what the
+    governance moments exercise.
+    """
+
+    delegation_parameters = {
+        "monthly_escalate_threshold": 15.0,
+        "monthly_block_threshold": 30.0,
+        "approved_services": ["netflix", "streamplus", "megabundle", "annualplus"],
+        "blocked_services": [],
+        "billing_data_whitelist": ["payment_token", "billing_email"],
+    }
+    if with_approved_services_version:
+        delegation_parameters["approved_services_version"] = 7
+    data_baseline = {
+        "subscriptions": {
+            "netflix":    {"monthly_eur": 13.99, "billing_period": "monthly", "fresh": True},
+            "streamplus": {"monthly_eur":  9.99, "billing_period": "monthly", "fresh": True},
+            "megabundle": {"monthly_eur": 19.00, "billing_period": "monthly", "fresh": True},
+            "annualplus": {"monthly_eur": 14.00, "billing_period": "monthly", "fresh": True},
+        },
+    }
+    return ConsumerContext(
+        context_id="ctx:eva-subs",
+        context_version=7,
+        consumer_id="consumer:eva",
+        mission_id="mission:subscription_renewal",
+        delegation_parameters=delegation_parameters,
+        data_baseline=data_baseline,
+    )
+
+
+def build_subscription_delegation() -> ShoppingDelegation:
+    """A ShoppingDelegation built to satisfy the consumer-agent's expectations.
+
+    The subscription scenario does not exercise shopping authority, but the
+    ConsumerAgent dataclass still expects a ShoppingDelegation for its
+    delegation_id / consumer_id / acting_on_behalf_of plumbing.
+    """
+
+    return ShoppingDelegation(
+        delegation_id="delegation:subscription-renewal",
+        consumer_id="consumer:eva",
+        mission=SUBSCRIPTION_MISSION_TEXT,
+        budget_ceiling_eur=30.0,            # mirrors monthly_block_threshold
+        auto_buy_threshold_eur=15.0,        # mirrors monthly_escalate_threshold
+        approved_retailers=[],
+        denied_retailers=[],
+        forbidden_materials=[],
+        substitution_tolerance_pct=0.10,
+        delivery_deadline_days=0,
+        min_return_window_days=0,
+        permitted_data_fields=["payment_token", "billing_email"],
+        notes="Subscription-domain delegation; shopping fields are placeholders.",
+    )
+
+
+def build_subscription_services(*, seed=None) -> Dict[str, SubscriptionServiceAgent]:
+    """The retailer-side subscription services, with their current real terms.
+
+    Compare these terms against the data_baseline above to see where the
+    agent has stale data:
+      - netflix:    matches baseline
+      - streamplus: +10% from baseline (drift within tolerance)
+      - megabundle: jumped to 34 EUR (over block ceiling)
+      - annualplus: silently switched to annual billing
+      - spotify:    new, not on the approved list
+      - aggregator: a billing aggregator that asks for full card numbers
+    """
+
+    return {
+        "netflix": SubscriptionServiceAgent(
+            service_id="netflix", display_name="Netflix",
+            monthly_eur=13.99, billing_period="monthly",
+        ),
+        "streamplus": SubscriptionServiceAgent(
+            service_id="streamplus", display_name="StreamPlus",
+            monthly_eur=10.49, billing_period="monthly",  # +5% drift from baseline 9.99
+        ),
+        "megabundle": SubscriptionServiceAgent(
+            service_id="megabundle", display_name="MegaBundle",
+            monthly_eur=34.00, billing_period="monthly",  # jumped past 30 EUR
+        ),
+        "annualplus": SubscriptionServiceAgent(
+            service_id="annualplus", display_name="AnnualPlus",
+            monthly_eur=14.00, billing_period="annual",   # silent period change
+        ),
+        "spotify": SubscriptionServiceAgent(
+            service_id="spotify", display_name="Spotify",
+            monthly_eur=9.99, billing_period="monthly",
+        ),
+        "aggregator": SubscriptionServiceAgent(
+            service_id="aggregator", display_name="Card Aggregator",
+            monthly_eur=5.0, billing_period="monthly",
+            requires_data_fields=["full_card_number", "billing_email"],
+        ),
+    }
 
 
 def build_transport(

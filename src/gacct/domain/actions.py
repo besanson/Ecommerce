@@ -22,6 +22,13 @@ class ActionType(str, Enum):
     APPLY_PROMOTION = "apply_promotion"
     UPGRADE_SHIPPING = "upgrade_shipping"
     SELECT_MERCHANT = "select_merchant"
+    # Subscription-domain actions. They live on the same governance path as
+    # the shopping-domain actions; only the policy packs that opt in to them
+    # are different.
+    RENEW_SUBSCRIPTION = "renew_subscription"
+    CANCEL_SUBSCRIPTION = "cancel_subscription"
+    ACCEPT_TERMS_CHANGE = "accept_terms_change"
+    SHARE_BILLING_DATA = "share_billing_data"
 
 
 class ProposedAction(BaseModel):
@@ -48,6 +55,16 @@ class ProposedAction(BaseModel):
         default=None,
         description="Why the consumer agent proposes this action. Recorded for "
         "audit; not used as a policy input.",
+    )
+    # Data-foundation provenance — see gacct.domain.context. Optional so legacy
+    # shopping scenarios that don't carry an explicit ConsumerContext still work.
+    context_id: Optional[str] = Field(
+        default=None,
+        description="ConsumerContext.context_id active when the action was proposed.",
+    )
+    context_version: Optional[int] = Field(
+        default=None,
+        description="ConsumerContext.context_version active when the action was proposed.",
     )
 
     def payload_summary(self) -> str:

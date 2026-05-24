@@ -9,7 +9,7 @@ from gacct.approvals.service import ScriptedApprovalPolicy
 from gacct.domain.approvals import ApprovalOutcome
 from gacct.governance.engine import GovernanceEngine
 from gacct.mcp.transport import MCPTransport
-from gacct.scenarios import blocked_path, conditional_path, escalation_path, happy_path
+from gacct.scenarios import blocked_path, conditional_path, escalation_path, happy_path, subscription_renewal
 from gacct.scenarios.fixtures import build_engine, build_transport
 from gacct.trace.store import TraceStore
 
@@ -44,6 +44,14 @@ SCENARIO_BUILDERS: Dict[str, tuple[Callable[[GovernanceEngine, TraceStore, MCPTr
     conditional_path.SCENARIO_ID: (
         conditional_path.run,
         ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
+    ),
+    subscription_renewal.SCENARIO_ID: (
+        subscription_renewal.run,
+        # In the subscription scenario the demo deliberately leaves
+        # escalations *unresolved* (Spotify and AnnualPlus): an escalation
+        # without an outcome shows the audit-time evidence of the open
+        # ticket. So default to TIMEOUT.
+        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.TIMEOUT),
     ),
 }
 

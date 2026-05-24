@@ -2,17 +2,29 @@
 
 This repository demonstrates how a consumer can delegate shopping tasks to an AI agent without delegating accountability.
 
-It is a reference implementation of a SARC-style runtime governance layer for delegated commerce. Governance is enforced at explicitly wrapped action boundaries only. The repository is a simulated environment, not a production-certified commerce system, and is not a universal governance layer for arbitrary agents or frameworks. The goal is to demonstrate a runtime governance pattern in which delegated action is intercepted, evaluated, escalated, and evidenced before any consequential effect leaves the consumer-agent boundary.
+Agentic AI can execute a consumer's mission end-to-end — but only if it operates on curated, contextualized consumer data, and only if its delegated authority is bounded by a runtime governance layer. This repository demonstrates all three: autonomous agentic action, structured consumer context as the data foundation, and SARC-style governance as the accountability layer. Governance is enforced at explicitly wrapped action boundaries only. The repository is a simulated environment, not a production-certified commerce system, and is not a universal governance layer for arbitrary agents or frameworks. The goal is to demonstrate a runtime pattern in which a capable agent, operating on a versioned data foundation, has its delegated action intercepted, evaluated, escalated, and evidenced before any consequential effect leaves the consumer-agent boundary.
 
 ## 1. Problem
 
-Consumer-facing AI agents will increasingly act on behalf of shoppers and transact with retailer-side AI agents. Each consequential step — selecting a merchant, sharing consumer data, accepting a substitute, applying a promotion, placing an order, charging a payment token — happens at machine speed. The traditional controls that bound human transactions (a checkout page, an email confirmation, a chargeback flow) were not designed for delegated action and do not survive contact with agent-to-agent commerce.
+Three forces are arriving together, and they only work in combination.
 
-Delegated action without runtime control is not "automation". It is unaccountable action.
+**Agentic capability.** Consumer-facing AI agents can now walk a complete mission — search merchants, evaluate offers, negotiate terms with retailer-side agents, propose substitutes, request promotions, place orders, charge payment tokens, renew subscriptions, cancel services — at machine speed and without human attention at each step. That is the power of agentic AI.
+
+**Contextual data.** Capable autonomy is only as good as the structured data the agent operates on. The consumer's delegation parameters (budget ceilings, approved merchants, substitution tolerances, data-sharing whitelists), the agent's last-known facts (today's price for each subscription, current billing period, last-confirmed approved-services version), and the explicit forbidden lists are not metadata — they are the data foundation. A capable agent operating on stale, missing, or unstructured context is blind or dangerous; the agent might renew at last week's price, accept yesterday's terms, or share fields the consumer never authorized.
+
+**Governance.** Even with full autonomy and pristine data, delegated action without a runtime control layer is unaccountable. The traditional human controls (a checkout page, an email confirmation, a chargeback flow) were not designed for agent-to-agent commerce. A consumer who delegates has not waived authority — they have bounded it. Without a runtime layer that enforces those bounds, agentic commerce is un-disputable, un-auditable, and un-insurable.
+
+Delegated action without all three — capability, context, control — is not "automation". It is unaccountable action against a moving target.
 
 ## 2. Why this matters
 
-A consumer who delegates a shopping mission has not waived their authority — they have bounded it. Acceptable budget, acceptable retailers, acceptable substitutions, acceptable data disclosure, and acceptable terms are all present in the delegation. The runtime stack must respect those bounds, generate evidence when they are reached, and refuse to silently exceed them. Anything less makes agentic commerce un-disputable, un-auditable, and un-insurable.
+The three pillars are not optional, and they are not interchangeable.
+
+**Agentic AI without curated data produces wrong or harmful actions.** A capable agent operating on a stale baseline will renew at a price that has silently jumped past the consumer's ceiling, accept a billing-period change the consumer never agreed to, or extend authority to a service the consumer has never seen. The governance layer can only do its job when the data it evaluates against is itself complete and fresh. Stale context is itself a governance failure mode; this demo treats it as such with a pre-PAG `DataContextValidator` that refuses to govern an action whose foundation is incomplete.
+
+**Curated data without governance produces unaccountable action.** Even a perfectly clean ConsumerContext is not a control. Knowing the budget ceiling does not enforce it; knowing the substitution tolerance does not bound it. Data on its own is just an information advantage. Without a runtime layer that mediates intent and execution, the agent can transact at the speed of light against rules nobody ever checked.
+
+**Only the combination produces delegated action that is powerful, correct, AND accountable.** A capable agent over a curated, versioned ConsumerContext, gated by a runtime governance layer (PAG → ATM → PAA) that allows, blocks, escalates, or conditionally allows each consequential step, is the minimum unit that scales. Every decision record carries `context_id` and `context_version` so an auditor — or a dispute reviewer, or an insurer — can replay exactly which data baseline was in effect when the agent acted. The shopping scenarios in this repository demonstrate the governance pillar. The subscription-renewal scenario demonstrates all three side-by-side: agentic portfolio sweep, versioned consumer context with deliberately stale records, and seven governance moments that each fail or succeed for a structurally different reason.
 
 ## 3. SARC design principles
 

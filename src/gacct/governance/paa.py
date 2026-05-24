@@ -59,6 +59,11 @@ class PostActionAudit:
             execution_outcome=execution_outcome,
             reversible_flag=action.reversible,
             conditions=conditions,
+            # Pass-through of data-foundation provenance. No semantic change
+            # to PAG/ATM/PAA — these fields are populated only when the
+            # caller attached a ConsumerContext to the ProposedAction.
+            context_id=getattr(action, "context_id", None),
+            context_version=getattr(action, "context_version", None),
         )
 
     def _pick_deciding_pack(self, pag: PAGOutcome):
