@@ -88,7 +88,7 @@ class MCPTransport:
 
         try:
             result = self.servers[receiver].invoke(method, params)
-        except Exception as exc:  # noqa: BLE001 — surface as MCP error
+        except Exception as exc:  # noqa: BLE001 - surface as MCP error
             err = MCPMessage(
                 sender=receiver,
                 receiver=sender,

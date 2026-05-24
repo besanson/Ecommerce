@@ -11,7 +11,7 @@ class ActionType(str, Enum):
 
     Only the actions listed here can flow through the governance layer.
     Anything not listed must be either non-consequential (and outside scope)
-    or a design error — the engine refuses unknown action types.
+    or a design error - the engine refuses unknown action types.
     """
 
     PLACE_ORDER = "place_order"
@@ -56,7 +56,7 @@ class ProposedAction(BaseModel):
         description="Why the consumer agent proposes this action. Recorded for "
         "audit; not used as a policy input.",
     )
-    # Data-foundation provenance — see gacct.domain.context. Optional so legacy
+    # Data-foundation provenance - see gacct.domain.context. Optional so legacy
     # shopping scenarios that don't carry an explicit ConsumerContext still work.
     context_id: Optional[str] = Field(
         default=None,

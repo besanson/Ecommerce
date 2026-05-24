@@ -15,7 +15,7 @@ class PostActionAudit:
     """Stage 3 of SARC runtime governance.
 
     Builds the DecisionRecord that the trace store persists. The audit stage
-    is the only writer of canonical decision records — the agents and the UI
+    is the only writer of canonical decision records - the agents and the UI
     are forbidden to construct them directly. This keeps a single chokepoint
     for audit shape evolution.
     """
@@ -60,7 +60,7 @@ class PostActionAudit:
             reversible_flag=action.reversible,
             conditions=conditions,
             # Pass-through of data-foundation provenance. No semantic change
-            # to PAG/ATM/PAA — these fields are populated only when the
+            # to PAG/ATM/PAA - these fields are populated only when the
             # caller attached a ConsumerContext to the ProposedAction.
             context_id=getattr(action, "context_id", None),
             context_version=getattr(action, "context_version", None),

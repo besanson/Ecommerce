@@ -10,7 +10,7 @@ class PolicyRule(BaseModel):
 
     The rule is intentionally declarative: the evaluator interprets `kind` and
     `params`. Adding a new rule type requires both a YAML edit and an evaluator
-    handler — this is deliberate, to keep policy surface area inspectable.
+    handler - this is deliberate, to keep policy surface area inspectable.
     """
 
     rule_id: str

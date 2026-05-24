@@ -22,7 +22,7 @@ class EvaluationContext:
     `delegation` carries shopping-domain authority; `consumer_context`
     carries the broader, versioned data foundation (subscription baselines,
     approved-service lists, billing-data whitelists). Either or both can be
-    supplied — rule handlers pick the source relevant to their action type.
+    supplied - rule handlers pick the source relevant to their action type.
     """
 
     delegation: Optional[ShoppingDelegation] = None
@@ -389,9 +389,9 @@ def _price_increase_within_threshold_with_logging(rule, ctx):
         return True, "drift exceeds tolerance; handled by the escalate rule", {
             "current_eur": current, "baseline_eur": baseline, "increase_pct": pct,
         }
-    # Positive drift within tolerance — require the log condition.
+    # Positive drift within tolerance - require the log condition.
     return False, (
-        f"positive drift {pct:+.1%} within tolerance — proceed only with log_price_drift condition"
+        f"positive drift {pct:+.1%} within tolerance - proceed only with log_price_drift condition"
     ), {
         "current_eur": current, "baseline_eur": baseline,
         "increase_pct": round(pct, 4), "threshold_pct": threshold,

@@ -55,7 +55,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
     # 1) Agent considers and tries a denied retailer.
     agent.select_merchant(scenario_id=SCENARIO_ID, retailer_id=shady.retailer_id)
 
-    # 2) Agent asks Trail Works what data it needs, then tries to share — block.
+    # 2) Agent asks Trail Works what data it needs, then tries to share - block.
     trail_terms = agent._mcp(trail, "get_terms")
     agent.share_consumer_data(
         scenario_id=SCENARIO_ID,

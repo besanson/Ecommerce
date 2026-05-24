@@ -3,10 +3,10 @@
 Information architecture (top → bottom):
 
   1. Mission briefing
-  2. System map (centerpiece) — drives state from the selected decision row
+  2. System map (centerpiece) - drives state from the selected decision row
   3. Decision ledger (clickable)
   4. Commerce cockpit (KPI strip)
-  5. Forensics — credibility anchor, opens for the selected decision
+  5. Forensics - credibility anchor, opens for the selected decision
 
 The story is governed delegated action, not chat.  Reasoning is one input
 into the model, surfaced inside Forensics; it does not dominate the page.
@@ -39,7 +39,7 @@ from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Scenario briefs and pillar tagging — inlined to avoid the recurring
+# Scenario briefs and pillar tagging - inlined to avoid the recurring
 # Streamlit-Cloud caching problem with sibling modules under app/.
 # ---------------------------------------------------------------------------
 
@@ -64,7 +64,7 @@ ACTION_PILLAR_TAGS: Dict[str, list] = {
     "upgrade_shipping":    ["AGENTIC", "GOVERNANCE"],
     "place_order":         ["AGENTIC", "GOVERNANCE"],
     "use_payment_token":   ["GOVERNANCE"],
-    # Subscription-domain actions — every one depends on a fresh ConsumerContext.
+    # Subscription-domain actions - every one depends on a fresh ConsumerContext.
     "renew_subscription":  ["AGENTIC", "DATA", "GOVERNANCE"],
     "cancel_subscription": ["AGENTIC", "GOVERNANCE"],
     "accept_terms_change": ["DATA", "GOVERNANCE"],
@@ -119,12 +119,12 @@ SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
     ),
     "subscription_renewal": ScenarioBrief(
         title="Subscription renewal · seven moments",
-        subtitle="Three pillars side-by-side — agentic action · curated data · governance",
+        subtitle="Three pillars side-by-side - agentic action · curated data · governance",
         what_to_watch=(
             "An end-to-end portfolio renewal exercising all three pillars. Each row "
             "in the ledger carries [AGENTIC] [DATA] [GOVERNANCE] tags showing which "
             "pillar(s) the moment demonstrates. The final row is BLOCK_MISSING_CONTEXT "
-            "— the data foundation is itself a governance precondition."
+            "- the data foundation is itself a governance precondition."
         ),
         expected_outcome=(
             "7 governance moments: 1 ALLOW, 1 ALLOW_WITH_CONDITIONS, 2 BLOCK, 2 "
@@ -392,7 +392,7 @@ CUSTOM_CSS = f"""
 
 
 # ---------------------------------------------------------------------------
-# System map — the visual centerpiece
+# System map - the visual centerpiece
 # ---------------------------------------------------------------------------
 
 
@@ -625,9 +625,9 @@ def render_mission(events: List[dict]) -> None:
         delivery = deleg.get("delivery_deadline_days", "?")
         ret = deleg.get("min_return_window_days", "?")
         sub_tol = int(round(deleg.get("substitution_tolerance_pct", 0) * 100))
-        materials = ", ".join(deleg.get("forbidden_materials", [])) or "—"
+        materials = ", ".join(deleg.get("forbidden_materials", [])) or "-"
         merchants_in = ", ".join(deleg.get("approved_retailers", []))
-        merchants_out = ", ".join(deleg.get("denied_retailers", [])) or "—"
+        merchants_out = ", ".join(deleg.get("denied_retailers", [])) or "-"
         data_fields = ", ".join(deleg.get("permitted_data_fields", []))
         chips = "".join([
             f'<div class="auth-chip"><span class="lbl">Budget ceiling</span><span class="val">€{budget:g}</span></div>',
@@ -689,9 +689,9 @@ def render_sarc_strip() -> None:
     st.markdown(
         f"""
         <div class="sarc-strip">
-          <div class="sarc-cell"><b>PAG · Pre-Action Gate</b> — checks delegated authority, policy, eligibility <em>before</em> the action.</div>
-          <div class="sarc-cell"><b>ATM · Action-Time Monitor</b> — verifies approval state and conditions at the moment of execution.</div>
-          <div class="sarc-cell"><b>PAA · Post-Action Audit</b> — writes the structured decision record into the trace.</div>
+          <div class="sarc-cell"><b>PAG · Pre-Action Gate</b> - checks delegated authority, policy, eligibility <em>before</em> the action.</div>
+          <div class="sarc-cell"><b>ATM · Action-Time Monitor</b> - verifies approval state and conditions at the moment of execution.</div>
+          <div class="sarc-cell"><b>PAA · Post-Action Audit</b> - writes the structured decision record into the trace.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -699,7 +699,7 @@ def render_sarc_strip() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Decision ledger — clickable rows
+# Decision ledger - clickable rows
 # ---------------------------------------------------------------------------
 
 
@@ -715,14 +715,14 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
         tags = pillar_tags(d["intended_action"])
         rows.append({
             "Time": d["timestamp"].split("T")[1][:8] if "T" in d["timestamp"] else d["timestamp"][:8],
-            "Pillars": " · ".join(tags) if tags else "—",
+            "Pillars": " · ".join(tags) if tags else "-",
             "Actor": d["actor"],
             "On behalf of": d["acting_on_behalf_of"],
             "Intended action": d["intended_action"],
             "Decision": DECISION_SHORT.get(d["decision"], d["decision"]),
-            "Policy applied": d.get("policy_id") or "—",
-            "Approval": "required · " + (d.get("approval_outcome") or "pending") if d["approval_required"] else "—",
-            "Context": f"v{d.get('context_version')}" if d.get("context_version") is not None else "—",
+            "Policy applied": d.get("policy_id") or "-",
+            "Approval": "required · " + (d.get("approval_outcome") or "pending") if d["approval_required"] else "-",
+            "Context": f"v{d.get('context_version')}" if d.get("context_version") is not None else "-",
             "Governance outcome": d["execution_outcome"][:80],
             "_decision_raw": d["decision"],
         })
@@ -792,7 +792,7 @@ def render_cockpit(events: List[dict]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Forensics — the credibility anchor
+# Forensics - the credibility anchor
 # ---------------------------------------------------------------------------
 
 
@@ -856,7 +856,7 @@ def render_forensics(events: List[dict], selected: dict) -> None:
             f'<div class="pipe-cell on">PAA · {d["paa_status"]}</div>'
             f'</div>'
         )
-        policies = ", ".join(d.get("policies_evaluated", [])) or "—"
+        policies = ", ".join(d.get("policies_evaluated", [])) or "-"
         approval_row = ""
         if d["approval_required"]:
             approval_row = f'<div class="kv"><b>Approval</b>: required · outcome <code>{(d.get("approval_outcome") or "pending").upper()}</code></div>'
@@ -869,7 +869,7 @@ def render_forensics(events: List[dict], selected: dict) -> None:
               <h4>Governance pipeline</h4>
               {pipe}
               <div class="kv" style="margin-top:6px;"><b>Policies evaluated</b>: {policies}</div>
-              <div class="kv"><b>Deciding policy</b>: <code>{d.get("policy_id") or "—"}</code> · v{d.get("policy_version") or "—"}</div>
+              <div class="kv"><b>Deciding policy</b>: <code>{d.get("policy_id") or "-"}</code> · v{d.get("policy_version") or "-"}</div>
               <div class="kv muted" style="margin-top:6px;">{d["rationale"]}</div>
               {approval_row}
               {cond_row}
@@ -940,7 +940,7 @@ def render_forensics(events: List[dict], selected: dict) -> None:
 
 
 def render_technical_appendix(events: List[dict]) -> None:
-    with st.expander("Technical appendix — full event timeline, MCP log, parser trace, raw delegation", expanded=False):
+    with st.expander("Technical appendix - full event timeline, MCP log, parser trace, raw delegation", expanded=False):
         tabs = st.tabs(["Full timeline", "MCP log", "Parser trace", "Raw delegation"])
         with tabs[0]:
             rows = []
@@ -1037,7 +1037,7 @@ def main() -> None:
         f"""
         <div class="hero">
           <h1>Governed Agentic Commerce · Control Tower</h1>
-          <div class="sub">Three pillars, equally visible: <span style="color:#7eb6ff;font-weight:700;">AGENTIC</span> — agents can execute a consumer's mission end-to-end; <span style="color:#b39ddb;font-weight:700;">DATA</span> — they do so on a structured, versioned consumer context; <span style="color:#cfd8dc;font-weight:700;">GOVERNANCE</span> — every consequential step is intercepted by a SARC-style runtime layer that allows, blocks, escalates, or conditionally allows it. Every material decision leaves evidence.</div>
+          <div class="sub">Three pillars, equally visible: <span style="color:#7eb6ff;font-weight:700;">AGENTIC</span> - agents can execute a consumer's mission end-to-end; <span style="color:#b39ddb;font-weight:700;">DATA</span> - they do so on a structured, versioned consumer context; <span style="color:#cfd8dc;font-weight:700;">GOVERNANCE</span> - every consequential step is intercepted by a SARC-style runtime layer that allows, blocks, escalates, or conditionally allows it. Every material decision leaves evidence.</div>
           <div class="meta">Scenario: <b>{sb.title if sb else scenario}</b> &nbsp;·&nbsp; {sb.subtitle if sb else ""} &nbsp;·&nbsp; <span style="color:{accent}; font-weight:700;">{DECISION_LABELS.get(state, '').lower()}</span></div>
         </div>
         """,

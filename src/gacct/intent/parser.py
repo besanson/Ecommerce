@@ -1,6 +1,6 @@
 """Natural-language consumer intent → structured ShoppingDelegation.
 
-This parser is intentionally a small set of regexes plus keyword lookups —
+This parser is intentionally a small set of regexes plus keyword lookups -
 not an LLM call. The repo runs without API keys. The parser's job here is
 demonstrative: it shows how a free-text mission would land as a structured
 delegation, and it surfaces a `parsing_trace` so the consumer can audit what
@@ -77,19 +77,19 @@ def parse_consumer_intent(
     m = re.search(r"(?:within|under|up\s*to|max(?:imum)?)\s*(?:€|EUR\s*)?(\d{2,5})\s*(?:eur|€|euros?)?", lower)
     if m:
         budget = float(m.group(1))
-        trace.append(f"Budget ceiling €{budget:.0f} — matched on '{m.group(0)}'.")
+        trace.append(f"Budget ceiling €{budget:.0f} - matched on '{m.group(0)}'.")
     else:
-        trace.append(f"Budget ceiling €{budget:.0f} — default (no explicit phrase found).")
+        trace.append(f"Budget ceiling €{budget:.0f} - default (no explicit phrase found).")
 
     # --- auto-buy threshold ---
     threshold = round(budget * 0.83)
     m = re.search(r"(?:no\s+auto[-\s]?(?:purchase|buy)|auto[-\s]?(?:purchase|buy)\s+threshold)\s*(?:above|over|>)?\s*(?:€|EUR\s*)?(\d{2,5})", lower)
     if m:
         threshold = float(m.group(1))
-        trace.append(f"Auto-buy threshold €{threshold:.0f} — matched on '{m.group(0)}'.")
+        trace.append(f"Auto-buy threshold €{threshold:.0f} - matched on '{m.group(0)}'.")
     else:
         trace.append(
-            f"Auto-buy threshold €{threshold:.0f} — derived as ≈83% of budget (no explicit phrase)."
+            f"Auto-buy threshold €{threshold:.0f} - derived as ≈83% of budget (no explicit phrase)."
         )
 
     # --- delivery deadline ---
@@ -97,27 +97,27 @@ def parse_consumer_intent(
     m = re.search(r"(?:within|in|delivery\s+within|deliver(?:y)?\s+in)\s+(\d{1,3})\s*(?:day|days|d)", lower)
     if m:
         delivery_days = int(m.group(1))
-        trace.append(f"Delivery deadline {delivery_days}d — matched on '{m.group(0)}'.")
+        trace.append(f"Delivery deadline {delivery_days}d - matched on '{m.group(0)}'.")
     else:
-        trace.append(f"Delivery deadline {delivery_days}d — default.")
+        trace.append(f"Delivery deadline {delivery_days}d - default.")
 
     # --- return window minimum ---
     return_days = 14
     m = re.search(r"return(?:s)?\s+(?:window|policy|of|min(?:imum)?)?\s*(?:of|at\s+least)?\s*(\d{1,3})\s*(?:day|days|d)", lower)
     if m:
         return_days = int(m.group(1))
-        trace.append(f"Minimum return window {return_days}d — matched on '{m.group(0)}'.")
+        trace.append(f"Minimum return window {return_days}d - matched on '{m.group(0)}'.")
     else:
-        trace.append(f"Minimum return window {return_days}d — default.")
+        trace.append(f"Minimum return window {return_days}d - default.")
 
     # --- substitution tolerance ---
     sub_tol = 0.10
     m = re.search(r"substitut(?:ion|e)[^.,;]*?(\d{1,2})\s*(?:%|percent|pct)", lower)
     if m:
         sub_tol = int(m.group(1)) / 100.0
-        trace.append(f"Substitution tolerance {sub_tol:.0%} — matched on '{m.group(0)}'.")
+        trace.append(f"Substitution tolerance {sub_tol:.0%} - matched on '{m.group(0)}'.")
     else:
-        trace.append(f"Substitution tolerance {sub_tol:.0%} — default.")
+        trace.append(f"Substitution tolerance {sub_tol:.0%} - default.")
 
     # --- forbidden materials ---
     forbidden: List[str] = []

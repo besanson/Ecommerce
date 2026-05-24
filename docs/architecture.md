@@ -48,7 +48,7 @@ Forensics view (Streamlit)
 | `gacct.approvals.service` | Captures approval requests and resolves them via a pluggable resolver | Resolver is dependency-injected |
 | `gacct.trace.store` | Append-only JSONL with per-scenario hash chain | Single sequence per `scenario_id` |
 | `gacct.scenarios` | Scripted demo paths + a CLI runner | Generates `examples/traces/*.jsonl` |
-| `app/streamlit_app.py` | Operator UI — five sections | Read-only over traces |
+| `app/streamlit_app.py` | Operator UI - five sections | Read-only over traces |
 
 ## Data curation layer
 
@@ -56,12 +56,12 @@ Before any SARC stage runs, the agent's data foundation must itself be complete 
 
 **`ConsumerContext`** (`gacct.domain.context`) is the structured, versioned data foundation an agent depends on. It carries two halves:
 
-- `delegation_parameters` — the bounded authority the consumer has granted (budget ceilings, auto-renew thresholds, approved-service lists with a version timestamp, billing-data whitelists, substitution tolerances).
-- `data_baseline` — the agent's last-known facts about the world (e.g. last-confirmed monthly prices, last-confirmed billing periods). These are the facts the agent reasons over when it proposes an action.
+- `delegation_parameters` - the bounded authority the consumer has granted (budget ceilings, auto-renew thresholds, approved-service lists with a version timestamp, billing-data whitelists, substitution tolerances).
+- `data_baseline` - the agent's last-known facts about the world (e.g. last-confirmed monthly prices, last-confirmed billing periods). These are the facts the agent reasons over when it proposes an action.
 
 `context_version` is a monotone integer that increments whenever any baseline field is updated. Every `ProposedAction` carries `context_id + context_version`, and `PostActionAudit` passes these through to the resulting `DecisionRecord`. The audit trail therefore proves *which* data snapshot was active when each decision was made.
 
-**`DataContextValidator`** (`gacct.domain.context`) is a pre-PAG gate. For every consequential action type it lists the keys the `ConsumerContext` must carry to be governable. If the context is missing required fields — for example a `renew_subscription` proposal whose context omits `approved_services_version` — the validator returns the new verdict `Decision.BLOCK_MISSING_CONTEXT` with the structured list of missing fields. PAG is never engaged for that action; the resulting `DecisionRecord` records `pag_status = "not_reached"`, the missing-fields list, and the context version that failed validation.
+**`DataContextValidator`** (`gacct.domain.context`) is a pre-PAG gate. For every consequential action type it lists the keys the `ConsumerContext` must carry to be governable. If the context is missing required fields - for example a `renew_subscription` proposal whose context omits `approved_services_version` - the validator returns the new verdict `Decision.BLOCK_MISSING_CONTEXT` with the structured list of missing fields. PAG is never engaged for that action; the resulting `DecisionRecord` records `pag_status = "not_reached"`, the missing-fields list, and the context version that failed validation.
 
 Why this is a governance moment and not a developer error:
 
@@ -95,7 +95,7 @@ The engine wires these together. The flow is fixed; agents and scenarios cannot 
 
 ## Where enforcement is mandatory
 
-Every method on `ConsumerAgent` that touches retailer state, payment state, or consumer data is wrapped in `engine.govern(...)`. The retailer-side `confirm_order` side effect is passed as a callable into the engine — the engine decides whether to invoke it. There is no API in `ConsumerAgent` that takes a retailer object and bypasses the engine.
+Every method on `ConsumerAgent` that touches retailer state, payment state, or consumer data is wrapped in `engine.govern(...)`. The retailer-side `confirm_order` side effect is passed as a callable into the engine - the engine decides whether to invoke it. There is no API in `ConsumerAgent` that takes a retailer object and bypasses the engine.
 
 The `tests/test_bypass.py` suite asserts these structural properties:
 

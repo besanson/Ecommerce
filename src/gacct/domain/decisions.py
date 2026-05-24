@@ -12,7 +12,7 @@ class Decision(str, Enum):
     BLOCK = "block"
     ESCALATE = "escalate"
     ALLOW_WITH_CONDITIONS = "allow_with_conditions"
-    # Pre-PAG verdict — the data foundation is missing or stale so the action
+    # Pre-PAG verdict - the data foundation is missing or stale so the action
     # cannot even be evaluated. Issued by gacct.domain.context.DataContextValidator
     # before the engine is engaged. Rules never return this value.
     BLOCK_MISSING_CONTEXT = "block_missing_context"

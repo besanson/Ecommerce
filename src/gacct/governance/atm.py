@@ -26,7 +26,7 @@ class ActionTimeMonitor:
     to verify that the conditions PAG attached are still satisfied, that any
     required approval came back APPROVED, and that the action's execution
     metadata stays within the bounds PAG assumed. If anything drifts the ATM
-    aborts the action — it does not retry or downgrade silently.
+    aborts the action - it does not retry or downgrade silently.
     """
 
     def authorize(

@@ -1,4 +1,4 @@
-"""Subscription scenario tests — 10 new tests asserting the seven governance
+"""Subscription scenario tests - 10 new tests asserting the seven governance
 moments + data-context validator + bypass resistance for RENEW_SUBSCRIPTION.
 
 Each individual-moment test runs the full scenario into a tmp directory and
@@ -53,12 +53,12 @@ def _by_service(decisions: List[dict], service: str) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 7 governance moments — one test each
+# 7 governance moments - one test each
 # ---------------------------------------------------------------------------
 
 
 def test_moment_1_netflix_allowed_within_threshold(scenario_decisions):
-    """Pillar tags here: AGENTIC + DATA + GOVERNANCE — fresh baseline, agent
+    """Pillar tags here: AGENTIC + DATA + GOVERNANCE - fresh baseline, agent
     proposes, governance allows under the auto-renew threshold."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
@@ -79,7 +79,7 @@ def test_moment_2_streamplus_conditional_under_drift_tolerance(scenario_decision
 
 
 def test_moment_3_megabundle_blocked_over_ceiling(scenario_decisions):
-    """Baseline says €19/mo; service now charges €34 — over the €30 block ceiling."""
+    """Baseline says €19/mo; service now charges €34 - over the €30 block ceiling."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
                if "service=megabundle" in d["detail"]["action_payload_summary"]]
@@ -97,7 +97,7 @@ def test_moment_4_spotify_escalates_unknown_service(scenario_decisions):
 
 
 def test_moment_5_aggregator_full_card_blocked(scenario_decisions):
-    """Aggregator demanded full_card_number — outside the billing-data whitelist."""
+    """Aggregator demanded full_card_number - outside the billing-data whitelist."""
 
     matches = _by_action(scenario_decisions, "share_billing_data")
     assert matches
@@ -116,7 +116,7 @@ def test_moment_6_annualplus_billing_period_change_escalates(scenario_decisions)
 
 def test_moment_7_missing_context_blocks_before_pag(scenario_decisions):
     """The last decision in the scenario is an action against an incomplete
-    ConsumerContext — DataContextValidator fires before PAG."""
+    ConsumerContext - DataContextValidator fires before PAG."""
 
     block_mc = [
         d for d in scenario_decisions

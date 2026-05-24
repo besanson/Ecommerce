@@ -2,19 +2,19 @@
 
 This repository demonstrates how a consumer can delegate shopping tasks to an AI agent without delegating accountability.
 
-Agentic AI can execute a consumer's mission end-to-end — but only if it operates on curated, contextualized consumer data, and only if its delegated authority is bounded by a runtime governance layer. This repository demonstrates all three: autonomous agentic action, structured consumer context as the data foundation, and SARC-style governance as the accountability layer. Governance is enforced at explicitly wrapped action boundaries only. The repository is a simulated environment, not a production-certified commerce system, and is not a universal governance layer for arbitrary agents or frameworks. The goal is to demonstrate a runtime pattern in which a capable agent, operating on a versioned data foundation, has its delegated action intercepted, evaluated, escalated, and evidenced before any consequential effect leaves the consumer-agent boundary.
+Agentic AI can execute a consumer's mission end-to-end - but only if it operates on curated, contextualized consumer data, and only if its delegated authority is bounded by a runtime governance layer. This repository demonstrates all three: autonomous agentic action, structured consumer context as the data foundation, and SARC-style governance as the accountability layer. Governance is enforced at explicitly wrapped action boundaries only. The repository is a simulated environment, not a production-certified commerce system, and is not a universal governance layer for arbitrary agents or frameworks. The goal is to demonstrate a runtime pattern in which a capable agent, operating on a versioned data foundation, has its delegated action intercepted, evaluated, escalated, and evidenced before any consequential effect leaves the consumer-agent boundary.
 
 ## 1. Problem
 
 Three forces are arriving together, and they only work in combination.
 
-**Agentic capability.** Consumer-facing AI agents can now walk a complete mission — search merchants, evaluate offers, negotiate terms with retailer-side agents, propose substitutes, request promotions, place orders, charge payment tokens, renew subscriptions, cancel services — at machine speed and without human attention at each step. That is the power of agentic AI.
+**Agentic capability.** Consumer-facing AI agents can now walk a complete mission - search merchants, evaluate offers, negotiate terms with retailer-side agents, propose substitutes, request promotions, place orders, charge payment tokens, renew subscriptions, cancel services - at machine speed and without human attention at each step. That is the power of agentic AI.
 
-**Contextual data.** Capable autonomy is only as good as the structured data the agent operates on. The consumer's delegation parameters (budget ceilings, approved merchants, substitution tolerances, data-sharing whitelists), the agent's last-known facts (today's price for each subscription, current billing period, last-confirmed approved-services version), and the explicit forbidden lists are not metadata — they are the data foundation. A capable agent operating on stale, missing, or unstructured context is blind or dangerous; the agent might renew at last week's price, accept yesterday's terms, or share fields the consumer never authorized.
+**Contextual data.** Capable autonomy is only as good as the structured data the agent operates on. The consumer's delegation parameters (budget ceilings, approved merchants, substitution tolerances, data-sharing whitelists), the agent's last-known facts (today's price for each subscription, current billing period, last-confirmed approved-services version), and the explicit forbidden lists are not metadata - they are the data foundation. A capable agent operating on stale, missing, or unstructured context is blind or dangerous; the agent might renew at last week's price, accept yesterday's terms, or share fields the consumer never authorized.
 
-**Governance.** Even with full autonomy and pristine data, delegated action without a runtime control layer is unaccountable. The traditional human controls (a checkout page, an email confirmation, a chargeback flow) were not designed for agent-to-agent commerce. A consumer who delegates has not waived authority — they have bounded it. Without a runtime layer that enforces those bounds, agentic commerce is un-disputable, un-auditable, and un-insurable.
+**Governance.** Even with full autonomy and pristine data, delegated action without a runtime control layer is unaccountable. The traditional human controls (a checkout page, an email confirmation, a chargeback flow) were not designed for agent-to-agent commerce. A consumer who delegates has not waived authority - they have bounded it. Without a runtime layer that enforces those bounds, agentic commerce is un-disputable, un-auditable, and un-insurable.
 
-Delegated action without all three — capability, context, control — is not "automation". It is unaccountable action against a moving target.
+Delegated action without all three - capability, context, control - is not "automation". It is unaccountable action against a moving target.
 
 ## 2. Why this matters
 
@@ -24,7 +24,7 @@ The three pillars are not optional, and they are not interchangeable.
 
 **Curated data without governance produces unaccountable action.** Even a perfectly clean ConsumerContext is not a control. Knowing the budget ceiling does not enforce it; knowing the substitution tolerance does not bound it. Data on its own is just an information advantage. Without a runtime layer that mediates intent and execution, the agent can transact at the speed of light against rules nobody ever checked.
 
-**Only the combination produces delegated action that is powerful, correct, AND accountable.** A capable agent over a curated, versioned ConsumerContext, gated by a runtime governance layer (PAG → ATM → PAA) that allows, blocks, escalates, or conditionally allows each consequential step, is the minimum unit that scales. Every decision record carries `context_id` and `context_version` so an auditor — or a dispute reviewer, or an insurer — can replay exactly which data baseline was in effect when the agent acted. The shopping scenarios in this repository demonstrate the governance pillar. The subscription-renewal scenario demonstrates all three side-by-side: agentic portfolio sweep, versioned consumer context with deliberately stale records, and seven governance moments that each fail or succeed for a structurally different reason.
+**Only the combination produces delegated action that is powerful, correct, AND accountable.** A capable agent over a curated, versioned ConsumerContext, gated by a runtime governance layer (PAG → ATM → PAA) that allows, blocks, escalates, or conditionally allows each consequential step, is the minimum unit that scales. Every decision record carries `context_id` and `context_version` so an auditor - or a dispute reviewer, or an insurer - can replay exactly which data baseline was in effect when the agent acted. The shopping scenarios in this repository demonstrate the governance pillar. The subscription-renewal scenario demonstrates all three side-by-side: agentic portfolio sweep, versioned consumer context with deliberately stale records, and seven governance moments that each fail or succeed for a structurally different reason.
 
 ## 3. SARC design principles
 
@@ -105,10 +105,10 @@ Then open the URL Streamlit prints (default `http://localhost:8501`) and use the
 
 Four scripted scenarios ship in `src/gacct/scenarios/`:
 
-1. **`happy_path`** — approved retailer, compliant product, within budget, acceptable shipping, no excessive data sharing. Every governed action is ALLOW.
-2. **`escalation_path`** — retailer proposes a substitute outside the 10% tolerance, and the resulting total exceeds the auto-buy threshold. PAG escalates twice; the scripted approval policy approves; the order proceeds.
-3. **`blocked_path`** — three independent BLOCKs: selecting an unapproved retailer, sharing data with a retailer asking for fields outside the whitelist, and accepting a 3-day return window when the minimum is 14.
-4. **`conditional_path`** — a loyalty promotion reduces total spend but requires marketing consent. The promotions pack returns ALLOW_WITH_CONDITIONS; the consumer's explicit `loyalty_enrollment_accepted` flag is the condition.
+1. **`happy_path`** - approved retailer, compliant product, within budget, acceptable shipping, no excessive data sharing. Every governed action is ALLOW.
+2. **`escalation_path`** - retailer proposes a substitute outside the 10% tolerance, and the resulting total exceeds the auto-buy threshold. PAG escalates twice; the scripted approval policy approves; the order proceeds.
+3. **`blocked_path`** - three independent BLOCKs: selecting an unapproved retailer, sharing data with a retailer asking for fields outside the whitelist, and accepting a 3-day return window when the minimum is 14.
+4. **`conditional_path`** - a loyalty promotion reduces total spend but requires marketing consent. The promotions pack returns ALLOW_WITH_CONDITIONS; the consumer's explicit `loyalty_enrollment_accepted` flag is the condition.
 
 Each path is replayable from `examples/traces/`.
 
@@ -122,7 +122,7 @@ Each path is replayable from `examples/traces/`.
 ## 9. What this does not prove
 
 - This does **not** prove full security or legal sufficiency for any jurisdiction.
-- This does **not** govern model cognition — only wrapped action boundaries.
+- This does **not** govern model cognition - only wrapped action boundaries.
 - This does **not** integrate with any real retailer, payment processor, or fulfilment system. The retailer agent and confirmation flow are simulated.
 - The trace's hash chain is a demo mechanism, not production-grade non-repudiation.
 - This is **not** a universal agent governance layer. It governs the actions enumerated in `ActionType`.

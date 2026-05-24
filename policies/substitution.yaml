@@ -4,7 +4,7 @@ title: Substitution tolerance
 description: >
   When a retailer proposes a substitute SKU, the price variance against the
   original offer must be within the consumer's tolerance. Beyond tolerance,
-  the substitute is not blocked outright — it is escalated for explicit
+  the substitute is not blocked outright - it is escalated for explicit
   consumer approval.
 applies_to_actions:
   - accept_substitute

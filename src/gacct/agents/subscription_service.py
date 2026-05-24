@@ -21,7 +21,7 @@ from gacct.mcp.transport import MCPServer
 class SubscriptionServiceAgent(MCPServer):
     service_id: str = ""
     display_name: str = ""
-    # Service-side current terms — these are the *retailer's* truth and may
+    # Service-side current terms - these are the *retailer's* truth and may
     # have drifted away from the consumer's data_baseline.
     monthly_eur: float = 0.0
     billing_period: str = "monthly"

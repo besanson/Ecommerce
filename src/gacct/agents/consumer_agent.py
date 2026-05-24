@@ -23,13 +23,13 @@ class ConsumerAgent:
     """A simulated personal shopping agent.
 
     Three responsibilities, kept separate:
-      * **Reasoning** — a `ConsumerAgentReasoner` produces thoughts based on
+      * **Reasoning** - a `ConsumerAgentReasoner` produces thoughts based on
         the delegation and incoming facts. Reasoning never has authority to
         act; it informs which `ProposedAction` to construct next.
-      * **Agent-to-agent communication** — an `MCPTransport` carries calls to
+      * **Agent-to-agent communication** - an `MCPTransport` carries calls to
         retailer-side tools. Every request and response is logged as an MCP
         message and persisted to the trace.
-      * **Action** — every consequential operation is wrapped in
+      * **Action** - every consequential operation is wrapped in
         `engine.govern(...)`. The consumer agent does *not* call retailer
         side effects directly; it passes the MCP call as a `side_effect`
         callable into the engine, and the engine decides whether to invoke it.
@@ -281,7 +281,7 @@ class ConsumerAgent:
         """Build and persist a synthetic BLOCK_MISSING_CONTEXT decision record.
 
         This is the only place in the agent that records a decision without
-        engine.govern() — and only because validation precedes the engine.
+        engine.govern() - and only because validation precedes the engine.
         The engine cannot evaluate an action whose data foundation is missing.
         """
 

@@ -3,7 +3,7 @@
 This is not an LLM. It is a deterministic explanatory layer that, given the
 delegation and the facts of the moment, produces the kind of thought trace a
 real reasoning agent would emit. The point is to make the agent's intent
-visible — to the audience, to the trace store, and to the governance layer's
+visible - to the audience, to the trace store, and to the governance layer's
 forensics view.
 
 The reasoning never has authority to act. It informs which `ProposedAction`
@@ -145,14 +145,14 @@ class ConsumerAgentReasoner:
             msgs.append(
                 Thought(
                     "expect",
-                    "Within tolerance — expect ALLOW. I will propose accept_substitute.",
+                    "Within tolerance - expect ALLOW. I will propose accept_substitute.",
                 )
             )
         else:
             msgs.append(
                 Thought(
                     "expect",
-                    "Outside tolerance — substitution pack will ESCALATE; consumer must approve.",
+                    "Outside tolerance - substitution pack will ESCALATE; consumer must approve.",
                 )
             )
         # Also flag the budget interaction.
@@ -217,11 +217,11 @@ class ConsumerAgentReasoner:
         d = self.delegation
         ok = retailer_id in d.approved_retailers and retailer_id not in d.denied_retailers
         if retailer_id in d.denied_retailers:
-            verdict = "On the denied list — retailers pack will BLOCK."
+            verdict = "On the denied list - retailers pack will BLOCK."
         elif retailer_id not in d.approved_retailers:
-            verdict = "Not on the approved list — retailers pack will BLOCK."
+            verdict = "Not on the approved list - retailers pack will BLOCK."
         else:
-            verdict = "Approved and not denied — expect ALLOW."
+            verdict = "Approved and not denied - expect ALLOW."
         return [
             Thought(
                 "merchant",

@@ -66,7 +66,7 @@ def test_engine_govern_is_only_public_action_path():
     # Allowed public members.
     assert "govern" in public
     suspicious = [n for n in public if n not in {"govern"}]
-    # Properties/dataclass-style accessors etc. are fine — but no method should
+    # Properties/dataclass-style accessors etc. are fine - but no method should
     # be named like a side-effect runner.
     for n in suspicious:
         assert not any(token in n.lower() for token in ("execute", "run", "apply", "commit"))

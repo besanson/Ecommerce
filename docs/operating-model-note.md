@@ -8,7 +8,7 @@ This repository is one shape of that control plane. The contract it implements i
 
 > No consequential action on a consumer's behalf executes outside the governance layer, and every governed action produces evidence sufficient to audit it after the fact.
 
-Concretely, the control plane is the `GovernanceEngine`. The data plane is everything else — the consumer agent's reasoning, the retailer agent's catalogue, the offer ranking. The two are coupled only through the engine.
+Concretely, the control plane is the `GovernanceEngine`. The data plane is everything else - the consumer agent's reasoning, the retailer agent's catalogue, the offer ranking. The two are coupled only through the engine.
 
 ## Why governance sits between intent and execution
 
@@ -26,15 +26,15 @@ Three properties make delegated commerce different from consented commerce:
 2. **Asymmetric reversibility.** Some actions (data sharing, identity disclosure, payment) cannot be cleanly reversed even when reversed in the ledger sense. The `reversible_flag` on every `DecisionRecord` is there so that audit and insurance can treat these differently.
 3. **Asymmetric blame.** When something goes wrong, three parties will dispute who is accountable: the consumer, the agent vendor, the retailer. A structured trace per action is the only durable answer. A chat transcript is not.
 
-Escalation exists for the actions that sit exactly at the authority boundary — substitutes outside tolerance, totals above the auto-buy threshold, retailers asking for more data than permitted. These are the moments where the *right* answer is not "machine decides" or "human decides" but "machine escalates with full context, human decides quickly, record both halves".
+Escalation exists for the actions that sit exactly at the authority boundary - substitutes outside tolerance, totals above the auto-buy threshold, retailers asking for more data than permitted. These are the moments where the *right* answer is not "machine decides" or "human decides" but "machine escalates with full context, human decides quickly, record both halves".
 
 ## What the consumer is actually delegating
 
 Under this model, the consumer is delegating three things:
 
-- **Mission execution** — the agent may search, rank, and propose actions.
-- **Authority within explicit bounds** — the agent may act on those proposals when they fall within the delegation.
-- **Escalation rights** — the agent may interrupt the consumer when an attractive option falls *outside* the delegation, and the consumer can extend authority for that single action.
+- **Mission execution** - the agent may search, rank, and propose actions.
+- **Authority within explicit bounds** - the agent may act on those proposals when they fall within the delegation.
+- **Escalation rights** - the agent may interrupt the consumer when an attractive option falls *outside* the delegation, and the consumer can extend authority for that single action.
 
 The consumer is *not* delegating accountability, identity, payment instruments outside their token boundary, or the right to set the delegation's terms. The governance layer is the surface that makes this distinction concrete.
 

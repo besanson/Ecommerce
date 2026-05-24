@@ -18,7 +18,7 @@ class TraceStore:
         approval_decided, scenario_completed)
 
     Each event carries a `prev_hash` and `self_hash` to chain a scenario's
-    history. This is a demo mechanism — see docs/risk-and-limitations.md.
+    history. This is a demo mechanism - see docs/risk-and-limitations.md.
     Production non-repudiation would need signed records and an external
     timestamp authority.
     """

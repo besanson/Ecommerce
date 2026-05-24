@@ -1,7 +1,7 @@
 """MCP-style message types.
 
-This module models the *shape* of MCP (Model Context Protocol) messages —
-JSON-RPC-flavoured request/response between agents — without claiming to be a
+This module models the *shape* of MCP (Model Context Protocol) messages -
+JSON-RPC-flavoured request/response between agents - without claiming to be a
 conformant MCP implementation. The transport in `gacct.mcp.transport` is
 in-process. The point of using MCP-style framing is so that an audience can
 see agent-to-agent communication as structured messages rather than as

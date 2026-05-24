@@ -29,7 +29,7 @@ class PreActionGate:
 
     Evaluates policy packs against the proposed action and returns a single
     decision. The PAG never executes the action. It also never has access
-    to retailer-side or payment-side effects — those belong to the ATM.
+    to retailer-side or payment-side effects - those belong to the ATM.
     """
 
     def __init__(self, packs: Dict[str, PolicyPack]):

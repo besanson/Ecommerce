@@ -26,6 +26,6 @@ class TraceEvent(BaseModel):
     prev_hash: Optional[str] = Field(
         default=None,
         description="Hash of the previous event in this scenario. Demo-grade "
-        "chaining only — see docs/risk-and-limitations.md.",
+        "chaining only - see docs/risk-and-limitations.md.",
     )
     self_hash: Optional[str] = None

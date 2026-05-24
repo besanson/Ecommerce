@@ -1,13 +1,13 @@
-"""Subscription renewal — the seven-moment scenario.
+"""Subscription renewal - the seven-moment scenario.
 
 Demonstrates the three pillars side-by-side:
 
-  AGENTIC  — the agent walks an end-to-end subscription portfolio, querying
+  AGENTIC  - the agent walks an end-to-end subscription portfolio, querying
              services, comparing current terms to a versioned baseline, and
              proposing renewals, cancellations, or escalations as needed.
-  DATA     — the ConsumerContext is the structured foundation. Stale prices,
+  DATA     - the ConsumerContext is the structured foundation. Stale prices,
              missing fields, and silent term changes are surfaced explicitly.
-  GOVERNANCE — every consequential step routes through the engine; a
+  GOVERNANCE - every consequential step routes through the engine; a
              DataContextValidator gates incomplete contexts before PAG.
 
 Seven moments:
@@ -80,7 +80,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         on_context_block=store.record_decision,
     )
 
-    # 1. Netflix — fresh data, under threshold → ALLOW
+    # 1. Netflix - fresh data, under threshold → ALLOW
     netflix = services["netflix"]
     netflix_terms = agent._mcp(netflix, "get_renewal_terms")
     agent.renew_subscription(
@@ -89,7 +89,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         billing_period=netflix_terms["billing_period"],
     )
 
-    # 2. StreamPlus — +10% drift within tolerance → ALLOW_WITH_CONDITIONS
+    # 2. StreamPlus - +10% drift within tolerance → ALLOW_WITH_CONDITIONS
     streamplus = services["streamplus"]
     sp_terms = agent._mcp(streamplus, "get_renewal_terms")
     agent.renew_subscription(
@@ -104,7 +104,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         "streamplus": {"monthly_eur": sp_terms["monthly_eur"], "billing_period": "monthly", "fresh": True},
     })
 
-    # 3. MegaBundle — jumped past block ceiling → BLOCK
+    # 3. MegaBundle - jumped past block ceiling → BLOCK
     megabundle = services["megabundle"]
     mb_terms = agent._mcp(megabundle, "get_renewal_terms")
     agent.renew_subscription(
@@ -113,7 +113,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         billing_period=mb_terms["billing_period"],
     )
 
-    # 4. Spotify — unknown service → ESCALATE (data gap)
+    # 4. Spotify - unknown service → ESCALATE (data gap)
     spotify = services["spotify"]
     spot_terms = agent._mcp(spotify, "get_renewal_terms")
     agent.renew_subscription(
@@ -130,7 +130,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         data_fields_requested=agg_terms["requires_data_fields"],
     )
 
-    # 6. AnnualPlus — silently switched to annual billing → ESCALATE (data: baseline says monthly)
+    # 6. AnnualPlus - silently switched to annual billing → ESCALATE (data: baseline says monthly)
     annualplus = services["annualplus"]
     ap_terms = agent._mcp(annualplus, "get_renewal_terms")
     agent.renew_subscription(
@@ -139,7 +139,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         billing_period=ap_terms["billing_period"],
     )
 
-    # 7. Incomplete context — clear the approved_services_version field
+    # 7. Incomplete context - clear the approved_services_version field
     # and try to renew → BLOCK_MISSING_CONTEXT before PAG is reached.
     stale_context = build_subscription_context(with_approved_services_version=False)
     agent.context = stale_context

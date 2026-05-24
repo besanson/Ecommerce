@@ -8,7 +8,7 @@ data snapshot was active when the decision was made.
 
 DataContextValidator is a pre-PAG gate that refuses to govern an action
 whose context is incomplete or stale for the proposed action type. Missing
-data is itself a governance failure mode — silently allowing an action
+data is itself a governance failure mode - silently allowing an action
 against a partial context would be unsafe.
 """
 
