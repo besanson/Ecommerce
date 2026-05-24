@@ -22,6 +22,17 @@ class ScenarioResult:
 
 
 SCENARIO_BUILDERS: Dict[str, tuple[Callable[[GovernanceEngine, TraceStore, MCPTransport, int], None], ScriptedApprovalPolicy]] = {
+    # Subscription renewal is the headline scenario - it exercises all three
+    # pillars (agentic portfolio sweep, versioned ConsumerContext, runtime
+    # governance) in a single end-to-end mission with seven distinct moments.
+    subscription_renewal.SCENARIO_ID: (
+        subscription_renewal.run,
+        # See note inside subscription_renewal.run for why the demo leaves
+        # escalations unresolved (TIMEOUT) - the open ticket is itself evidence.
+        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.TIMEOUT),
+    ),
+    # The shopping-domain scenarios remain as governance-isolation studies:
+    # each foregrounds one verdict class against a single mission.
     happy_path.SCENARIO_ID: (
         happy_path.run,
         ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
@@ -44,14 +55,6 @@ SCENARIO_BUILDERS: Dict[str, tuple[Callable[[GovernanceEngine, TraceStore, MCPTr
     conditional_path.SCENARIO_ID: (
         conditional_path.run,
         ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
-    ),
-    subscription_renewal.SCENARIO_ID: (
-        subscription_renewal.run,
-        # In the subscription scenario the demo deliberately leaves
-        # escalations *unresolved* (Spotify and AnnualPlus): an escalation
-        # without an outcome shows the audit-time evidence of the open
-        # ticket. So default to TIMEOUT.
-        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.TIMEOUT),
     ),
 }
 

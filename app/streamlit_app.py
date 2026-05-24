@@ -34,7 +34,11 @@ import streamlit as st  # noqa: E402
 
 from gacct.domain.decisions import DecisionRecord  # noqa: E402
 from gacct.intent.parser import parse_consumer_intent  # noqa: E402
-from gacct.scenarios.fixtures import DEFAULT_MISSION_TEXT, build_consumer_delegation  # noqa: E402
+from gacct.scenarios.fixtures import (  # noqa: E402
+    DEFAULT_MISSION_TEXT,
+    SUBSCRIPTION_MISSION_TEXT,
+    build_consumer_delegation,
+)
 from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
 
@@ -1008,9 +1012,15 @@ def main() -> None:
                           help="Pre-generated traces ship in examples/. Runtime traces are produced by 'Simulate governed mission' below.")
         st.divider()
         st.subheader("Custom mission (optional)")
+        # Pre-fill with the mission text matching the currently-selected
+        # scenario, so editing 'Consumer says' produces a coherent re-run.
+        _default_text = (
+            SUBSCRIPTION_MISSION_TEXT if scenario == "subscription_renewal"
+            else DEFAULT_MISSION_TEXT
+        )
         intent_text = st.text_area(
             "Consumer says (free text)",
-            value=DEFAULT_MISSION_TEXT,
+            value=_default_text,
             height=140,
         )
         seed = st.number_input("Random seed", min_value=0, max_value=2**31 - 1, value=42, step=1)

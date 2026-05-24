@@ -79,11 +79,17 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed responsibili
 
 ## 5. Scenario
 
-The flagship scenario is a half-marathon shoe purchase delegated by consumer "Eva" to her personal shopping agent. The delegation captures:
+The flagship scenario is a **subscription portfolio renewal** delegated by consumer "Eva" to her personal agent. It was chosen as the headline because it exercises all three pillars in a single end-to-end mission - agentic portfolio sweep, versioned ConsumerContext with deliberately stale records, and seven distinct governance moments. The delegation captures:
+
+> Renew active subscriptions up to 15 EUR/month automatically; escalate renewals between 15-30 EUR; block anything above 30 EUR or any unapproved new service. No sharing of payment data beyond token and billing email. Cancel if renewal terms change billing period without my approval.
+
+Eva's agent walks Netflix, StreamPlus, MegaBundle, AnnualPlus, plus a never-before-seen Spotify and an aggregator demanding full card details. Each step produces a different governance verdict depending on whether the consumer's data baseline is fresh, whether the policy is exceeded, and whether explicit consumer approval is on file.
+
+A complementary set of **shopping-domain scenarios** (half-marathon shoe purchase) isolate the governance pillar one verdict at a time - useful when you want to see a single ALLOW / BLOCK / ESCALATE / ALLOW_WITH_CONDITIONS without competing context. They share the same delegation shape:
 
 > Buy running shoes for a half marathon within 180 EUR, from approved retailers only, no leather products, delivery within 3 days, substitution only within 10 percent price variance, no auto-purchase above 150 EUR, and no sharing of personal data beyond shipping details and payment token.
 
-These bounds map directly to the policy packs in `policies/`. The scenarios in `src/gacct/scenarios/` exercise the boundary cases.
+All delegations map directly to the policy packs in `policies/`. The scenarios in `src/gacct/scenarios/` exercise the boundary cases.
 
 ## 6. How to run
 
@@ -107,12 +113,13 @@ Then open the URL Streamlit prints (default `http://localhost:8501`) and use the
 
 ## 7. Demo paths
 
-Four scripted scenarios ship in `src/gacct/scenarios/`:
+Five scripted scenarios ship in `src/gacct/scenarios/`. The first is the headline; the rest are governance-pillar isolation studies in the shopping domain.
 
-1. **`happy_path`** - approved retailer, compliant product, within budget, acceptable shipping, no excessive data sharing. Every governed action is ALLOW.
-2. **`escalation_path`** - retailer proposes a substitute outside the 10% tolerance, and the resulting total exceeds the auto-buy threshold. PAG escalates twice; the scripted approval policy approves; the order proceeds.
-3. **`blocked_path`** - three independent BLOCKs: selecting an unapproved retailer, sharing data with a retailer asking for fields outside the whitelist, and accepting a 3-day return window when the minimum is 14.
-4. **`conditional_path`** - a loyalty promotion reduces total spend but requires marketing consent. The promotions pack returns ALLOW_WITH_CONDITIONS; the consumer's explicit `loyalty_enrollment_accepted` flag is the condition.
+1. **`subscription_renewal`** (headline) - end-to-end portfolio sweep against a versioned ConsumerContext. Seven moments, each tagged in the UI with `[AGENTIC]` `[DATA]` `[GOVERNANCE]` so the three pillars are visible per row: Netflix renewal (ALLOW), StreamPlus price drift within tolerance (ALLOW_WITH_CONDITIONS), MegaBundle over the block ceiling (BLOCK), Spotify unknown service (ESCALATE), aggregator demanding full card number (BLOCK), AnnualPlus silent billing-period change (ESCALATE), and a renewal against an incomplete context (BLOCK_MISSING_CONTEXT - the data foundation is itself a governance precondition).
+2. **`happy_path`** - approved retailer, compliant product, within budget, acceptable shipping, no excessive data sharing. Every governed action is ALLOW.
+3. **`escalation_path`** - retailer proposes a substitute outside the 10% tolerance, and the resulting total exceeds the auto-buy threshold. PAG escalates twice; the scripted approval policy approves; the order proceeds.
+4. **`blocked_path`** - three independent BLOCKs: selecting an unapproved retailer, sharing data with a retailer asking for fields outside the whitelist, and accepting a 3-day return window when the minimum is 14.
+5. **`conditional_path`** - a loyalty promotion reduces total spend but requires marketing consent. The promotions pack returns ALLOW_WITH_CONDITIONS; the consumer's explicit `loyalty_enrollment_accepted` flag is the condition.
 
 Each path is replayable from `examples/traces/`.
 
