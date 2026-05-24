@@ -9,7 +9,7 @@ from gacct.approvals.service import ScriptedApprovalPolicy
 from gacct.domain.approvals import ApprovalOutcome
 from gacct.governance.engine import GovernanceEngine
 from gacct.mcp.transport import MCPTransport
-from gacct.scenarios import blocked_path, conditional_path, escalation_path, happy_path, subscription_renewal
+from gacct.scenarios import subscription_renewal
 from gacct.scenarios.fixtures import build_engine, build_transport
 from gacct.trace.store import TraceStore
 
@@ -22,39 +22,14 @@ class ScenarioResult:
 
 
 SCENARIO_BUILDERS: Dict[str, tuple[Callable[[GovernanceEngine, TraceStore, MCPTransport, int], None], ScriptedApprovalPolicy]] = {
-    # Subscription renewal is the headline scenario - it exercises all three
-    # pillars (agentic portfolio sweep, versioned ConsumerContext, runtime
-    # governance) in a single end-to-end mission with seven distinct moments.
+    # The demo is intentionally focused on a single, end-to-end scenario: a
+    # portfolio of real consumer subscriptions. It exercises all three pillars
+    # (agentic portfolio sweep, versioned ConsumerContext, runtime governance)
+    # across seven moments. Escalations resolve to TIMEOUT by default - an
+    # open approval ticket is itself audit evidence.
     subscription_renewal.SCENARIO_ID: (
         subscription_renewal.run,
-        # See note inside subscription_renewal.run for why the demo leaves
-        # escalations unresolved (TIMEOUT) - the open ticket is itself evidence.
         ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.TIMEOUT),
-    ),
-    # The shopping-domain scenarios remain as governance-isolation studies:
-    # each foregrounds one verdict class against a single mission.
-    happy_path.SCENARIO_ID: (
-        happy_path.run,
-        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
-    ),
-    escalation_path.SCENARIO_ID: (
-        escalation_path.run,
-        ScriptedApprovalPolicy(
-            responses={
-                "accept_substitute": ApprovalOutcome.APPROVED,
-                "place_order": ApprovalOutcome.APPROVED,
-                "use_payment_token": ApprovalOutcome.APPROVED,
-            },
-            default=ApprovalOutcome.REJECTED,
-        ),
-    ),
-    blocked_path.SCENARIO_ID: (
-        blocked_path.run,
-        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
-    ),
-    conditional_path.SCENARIO_ID: (
-        conditional_path.run,
-        ScriptedApprovalPolicy(responses={}, default=ApprovalOutcome.REJECTED),
     ),
 }
 

@@ -45,5 +45,5 @@ Wherever a real integration would be required, the code is structured so that th
 
 - That governing wrapped action boundaries equals governing the agent.
 - That the absence of a `force_execute` API on the engine is, by itself, a defence against a hostile runtime that imports and calls the retailer agent directly. The bypass tests in `tests/test_bypass.py` reduce, but do not eliminate, this risk.
-- That the rule kinds shipped here are sufficient for a real shopping mission. They are sufficient for the four scripted scenarios.
+- That the rule kinds shipped here are sufficient for a real consumer mission. They are sufficient for the seven moments in the subscription scenario; the engine itself is action-type agnostic.
 - That allow / block / escalate / allow-with-conditions is the only verdict surface that makes sense for delegated commerce. It is *a* surface that handles the actions in the scenario; richer surfaces are plausible.

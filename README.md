@@ -79,17 +79,13 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed responsibili
 
 ## 5. Scenario
 
-The flagship scenario is a **subscription portfolio renewal** delegated by consumer "Eva" to her personal agent. It was chosen as the headline because it exercises all three pillars in a single end-to-end mission - agentic portfolio sweep, versioned ConsumerContext with deliberately stale records, and seven distinct governance moments. The delegation captures:
+The demo is a **subscription portfolio renewal** delegated by consumer "Eva" to her personal agent. It is intentionally the only end-to-end scenario, because it exercises all three pillars in a single mission - agentic portfolio sweep, versioned ConsumerContext with deliberately stale records, and seven distinct governance moments across Eva's real-world subscriptions. The delegation captures:
 
-> Renew active subscriptions up to 15 EUR/month automatically; escalate renewals between 15-30 EUR; block anything above 30 EUR or any unapproved new service. No sharing of payment data beyond token and billing email. Cancel if renewal terms change billing period without my approval.
+> Renew my active subscriptions up to 15 EUR/month automatically; escalate renewals between 15-30 EUR; block anything above 30 EUR or any new service I have not pre-approved. No sharing of payment data beyond token and billing email. Cancel if the renewal silently changes billing period.
 
-Eva's agent walks Netflix, StreamPlus, MegaBundle, AnnualPlus, plus a never-before-seen Spotify and an aggregator demanding full card details. Each step produces a different governance verdict depending on whether the consumer's data baseline is fresh, whether the policy is exceeded, and whether explicit consumer approval is on file.
+Eva's portfolio: **Netflix, Spotify Premium, DAZN Total, Apple TV+, Amazon Prime, Disney+**, plus a billing-aggregator called BundleSavvy. Each step produces a different governance verdict depending on whether the consumer's data baseline matches reality, whether the policy threshold is exceeded, and whether explicit consumer approval is on file.
 
-A complementary set of **shopping-domain scenarios** (half-marathon shoe purchase) isolate the governance pillar one verdict at a time - useful when you want to see a single ALLOW / BLOCK / ESCALATE / ALLOW_WITH_CONDITIONS without competing context. They share the same delegation shape:
-
-> Buy running shoes for a half marathon within 180 EUR, from approved retailers only, no leather products, delivery within 3 days, substitution only within 10 percent price variance, no auto-purchase above 150 EUR, and no sharing of personal data beyond shipping details and payment token.
-
-All delegations map directly to the policy packs in `policies/`. The scenarios in `src/gacct/scenarios/` exercise the boundary cases.
+The delegation maps directly to the policy packs in `policies/`. The scenario in `src/gacct/scenarios/subscription_renewal.py` walks Eva's portfolio end-to-end and exercises the seven moments listed in §7.
 
 ## 6. How to run
 
@@ -109,19 +105,23 @@ make scenarios   # writes examples/traces/*.jsonl
 make run         # streamlit run app/streamlit_app.py
 ```
 
-Then open the URL Streamlit prints (default `http://localhost:8501`) and use the sidebar to switch scenarios.
+Then open the URL Streamlit prints (default `http://localhost:8501`).
 
 ## 7. Demo paths
 
-Five scripted scenarios ship in `src/gacct/scenarios/`. The first is the headline; the rest are governance-pillar isolation studies in the shopping domain.
+One end-to-end scenario - `subscription_renewal` - ships in `src/gacct/scenarios/`. It walks Eva's real subscription portfolio one service at a time and emits a different verdict at each moment. Each row in the UI is tagged `[AGENTIC]` `[DATA]` `[GOVERNANCE]` so the three pillars are visible per moment.
 
-1. **`subscription_renewal`** (headline) - end-to-end portfolio sweep against a versioned ConsumerContext. Seven moments, each tagged in the UI with `[AGENTIC]` `[DATA]` `[GOVERNANCE]` so the three pillars are visible per row: Netflix renewal (ALLOW), StreamPlus price drift within tolerance (ALLOW_WITH_CONDITIONS), MegaBundle over the block ceiling (BLOCK), Spotify unknown service (ESCALATE), aggregator demanding full card number (BLOCK), AnnualPlus silent billing-period change (ESCALATE), and a renewal against an incomplete context (BLOCK_MISSING_CONTEXT - the data foundation is itself a governance precondition).
-2. **`happy_path`** - approved retailer, compliant product, within budget, acceptable shipping, no excessive data sharing. Every governed action is ALLOW.
-3. **`escalation_path`** - retailer proposes a substitute outside the 10% tolerance, and the resulting total exceeds the auto-buy threshold. PAG escalates twice; the scripted approval policy approves; the order proceeds.
-4. **`blocked_path`** - three independent BLOCKs: selecting an unapproved retailer, sharing data with a retailer asking for fields outside the whitelist, and accepting a 3-day return window when the minimum is 14.
-5. **`conditional_path`** - a loyalty promotion reduces total spend but requires marketing consent. The promotions pack returns ALLOW_WITH_CONDITIONS; the consumer's explicit `loyalty_enrollment_accepted` flag is the condition.
+| # | Service                         | Trigger                                                         | Verdict                  |
+|---|---------------------------------|-----------------------------------------------------------------|--------------------------|
+| 1 | **Netflix** (€13.99)            | Fresh baseline, under auto-renew threshold                      | `ALLOW`                  |
+| 2 | **Spotify Premium** (€10.49)    | +5% price drift, inside the 10% tolerance                       | `ALLOW_WITH_CONDITIONS`  |
+| 3 | **DAZN Total** (€34.99)         | Jumped over the €30 block ceiling                               | `BLOCK`                  |
+| 4 | **Apple TV+** (new)             | Not on Eva's approved-services list                             | `ESCALATE`               |
+| 5 | **BundleSavvy** (aggregator)    | Asked for `full_card_number` - outside the billing whitelist    | `BLOCK`                  |
+| 6 | **Amazon Prime**                | Silently switched from monthly to annual billing                | `ESCALATE`               |
+| 7 | **Disney+** (stale context)     | Renewal attempted against an incomplete ConsumerContext         | `BLOCK_MISSING_CONTEXT`  |
 
-Each path is replayable from `examples/traces/`.
+The scenario is replayable from `examples/traces/subscription_renewal.jsonl`.
 
 ## 8. What this proves
 
@@ -172,11 +172,8 @@ Plausible next steps if this pattern were to be hardened toward pre-production:
 │   ├── returns.yaml
 │   └── substitution.yaml
 ├── examples/
-│   └── traces/                     # checked-in scenario traces
-│       ├── happy_path.jsonl
-│       ├── escalation_path.jsonl
-│       ├── blocked_path.jsonl
-│       └── conditional_path.jsonl
+│   └── traces/                     # checked-in scenario trace
+│       └── subscription_renewal.jsonl
 ├── src/gacct/
 │   ├── agents/                     # consumer & retailer simulated agents
 │   ├── approvals/                  # ApprovalService + scripted policy
@@ -185,7 +182,7 @@ Plausible next steps if this pattern were to be hardened toward pre-production:
 │   ├── policy/                     # loader + rule evaluator
 │   ├── scenarios/                  # scripted demo paths + runner
 │   └── trace/                      # JSONL trace store
-├── tests/                          # 32 tests across pag, engine, scenarios, trace store, bypass
+├── tests/                          # pag, engine, scenarios, trace store, bypass, subscription
 └── docs/
     ├── architecture.md
     ├── narrative-demo-script.md

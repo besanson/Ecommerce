@@ -35,9 +35,8 @@ import streamlit as st  # noqa: E402
 from gacct.domain.decisions import DecisionRecord  # noqa: E402
 from gacct.intent.parser import parse_consumer_intent  # noqa: E402
 from gacct.scenarios.fixtures import (  # noqa: E402
-    DEFAULT_MISSION_TEXT,
     SUBSCRIPTION_MISSION_TEXT,
-    build_consumer_delegation,
+    build_subscription_delegation,
 )
 from gacct.scenarios.runner import SCENARIO_BUILDERS, run_scenario  # noqa: E402
 from gacct.trace.store import TraceStore  # noqa: E402
@@ -81,49 +80,9 @@ def pillar_tags(action_type: str) -> list:
 
 
 SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
-    "happy_path": ScenarioBrief(
-        title="Happy path",
-        subtitle="Mission parsed · approved retailer · compliant product · within budget",
-        what_to_watch=(
-            "Walk through the agent's reasoning, then the MCP calls to the retailer, "
-            "then every governed action. Every decision returns ALLOW; the retailer's "
-            "confirm_order tool runs only after the engine authorizes it."
-        ),
-        expected_outcome="5 governed actions, all ALLOW. Order is placed; payment token used.",
-    ),
-    "escalation_path": ScenarioBrief(
-        title="Escalation path",
-        subtitle="Substitute outside tolerance · total above auto-buy threshold",
-        what_to_watch=(
-            "The agent asks the retailer for a substitute via MCP. Reasoning predicts "
-            "two escalations (substitution variance + budget). The scripted approval "
-            "policy approves; order completes at €165."
-        ),
-        expected_outcome="Multiple ESCALATE verdicts; consumer approves; order completes.",
-    ),
-    "blocked_path": ScenarioBrief(
-        title="Blocked path",
-        subtitle="Denied retailer · excess data sharing · weak return terms",
-        what_to_watch=(
-            "Three independent governance failures. Each is preceded by reasoning that "
-            "explicitly predicts the BLOCK, and each fails on a different policy. "
-            "confirm_order is never invoked over MCP."
-        ),
-        expected_outcome="3 BLOCK verdicts. No order. No data shared.",
-    ),
-    "conditional_path": ScenarioBrief(
-        title="Allow-with-conditions path",
-        subtitle="Loyalty promotion · requires marketing consent",
-        what_to_watch=(
-            "Promotion would reduce total but requires marketing_consent. PAG returns "
-            "ALLOW_WITH_CONDITIONS; the consumer's explicit opt-in flag is what ATM "
-            "checks at execute time."
-        ),
-        expected_outcome="1 ALLOW_WITH_CONDITIONS; condition met; order completes.",
-    ),
     "subscription_renewal": ScenarioBrief(
         title="Subscription renewal · seven moments",
-        subtitle="Three pillars side-by-side - agentic action · curated data · governance",
+        subtitle="Eva's real portfolio: Netflix · Spotify · DAZN · Apple TV+ · Amazon Prime · Disney+",
         what_to_watch=(
             "An end-to-end portfolio renewal exercising all three pillars. Each row "
             "in the ledger carries [AGENTIC] [DATA] [GOVERNANCE] tags showing which "
@@ -131,8 +90,11 @@ SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
             "- the data foundation is itself a governance precondition."
         ),
         expected_outcome=(
-            "7 governance moments: 1 ALLOW, 1 ALLOW_WITH_CONDITIONS, 2 BLOCK, 2 "
-            "ESCALATE, 1 BLOCK_MISSING_CONTEXT. context_version pinned on every record."
+            "7 governance moments: 1 ALLOW (Netflix), 1 ALLOW_WITH_CONDITIONS "
+            "(Spotify drift), 2 BLOCK (DAZN over ceiling, BundleSavvy data), 2 "
+            "ESCALATE (Apple TV+ unknown, Amazon Prime period change), 1 "
+            "BLOCK_MISSING_CONTEXT (Disney+ with stale ConsumerContext). "
+            "context_version pinned on every record."
         ),
     ),
 }
@@ -767,21 +729,34 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
 
 def render_cockpit(events: List[dict]) -> None:
     records = _decision_records(events)
-    delegation = build_consumer_delegation()
+    delegation = build_subscription_delegation()
     attempted = len(records)
     allowed = sum(1 for r in records if r.decision.value in ("allow", "allow_with_conditions"))
     blocked = sum(1 for r in records if r.decision.value == "block")
     escalated = sum(1 for r in records if r.decision.value == "escalate")
     approvals = sum(1 for r in records if r.approval_required)
-    budget_consumed = 0.0
-    discount = 0.0
-    for r in records:
-        if r.atm_status == "executed" and r.intended_action == "place_order":
-            budget_consumed += float(r.facts_used.get("budget.over_ceiling", {}).get("total_eur", 0.0))
-        if r.atm_status == "executed" and r.intended_action == "apply_promotion":
-            discount += float(r.facts_used.get("promotions.must_reduce_total", {}).get("discount_eur", 0.0))
-
     missing_ctx = sum(1 for r in records if r.decision.value == "block_missing_context")
+
+    # Subscription-domain cockpit: surface monthly commitment authorized + the
+    # exposure that governance prevented from reaching the consumer's wallet.
+    authorized_monthly = 0.0
+    prevented_monthly = 0.0
+    for r in records:
+        if r.intended_action != "renew_subscription":
+            continue
+        summary = r.action_payload_summary or ""
+        monthly = 0.0
+        for tok in summary.split():
+            if tok.startswith("monthly_eur="):
+                try:
+                    monthly = float(tok.split("=", 1)[1])
+                except ValueError:
+                    monthly = 0.0
+        if r.atm_status == "executed":
+            authorized_monthly += monthly
+        elif r.decision.value in ("block", "block_missing_context", "escalate"):
+            prevented_monthly += monthly
+
     cols = st.columns(5)
     cols[0].metric("Actions attempted", attempted)
     cols[1].metric("Allowed", allowed)
@@ -791,8 +766,16 @@ def render_cockpit(events: List[dict]) -> None:
 
     cols = st.columns(3)
     cols[0].metric("Escalations triggered", escalated)
-    cols[1].metric("Budget consumed", f"€{budget_consumed:,.0f}", f"of €{delegation.budget_ceiling_eur:,.0f} ceiling")
-    cols[2].metric("Savings captured", f"€{discount:,.0f}")
+    cols[1].metric(
+        "Monthly spend authorized",
+        f"€{authorized_monthly:,.2f}",
+        f"per-service ceiling €{delegation.budget_ceiling_eur:,.0f}",
+    )
+    cols[2].metric(
+        "Monthly spend prevented",
+        f"€{prevented_monthly:,.2f}",
+        help="Sum of subscription renewals governance blocked, escalated, or refused for missing context.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1012,15 +995,9 @@ def main() -> None:
                           help="Pre-generated traces ship in examples/. Runtime traces are produced by 'Simulate governed mission' below.")
         st.divider()
         st.subheader("Custom mission (optional)")
-        # Pre-fill with the mission text matching the currently-selected
-        # scenario, so editing 'Consumer says' produces a coherent re-run.
-        _default_text = (
-            SUBSCRIPTION_MISSION_TEXT if scenario == "subscription_renewal"
-            else DEFAULT_MISSION_TEXT
-        )
         intent_text = st.text_area(
             "Consumer says (free text)",
-            value=_default_text,
+            value=SUBSCRIPTION_MISSION_TEXT,
             height=140,
         )
         seed = st.number_input("Random seed", min_value=0, max_value=2**31 - 1, value=42, step=1)
@@ -1029,9 +1006,9 @@ def main() -> None:
             target = RUNTIME_DIR / f"{scenario}.jsonl"
             if target.exists():
                 target.unlink()
-            from gacct.scenarios import happy_path, escalation_path, blocked_path, conditional_path
-            for mod in (happy_path, escalation_path, blocked_path, conditional_path):
-                mod.MISSION_TEXT = intent_text  # type: ignore[attr-defined]
+            # The subscription scenario uses a fixed mission text bound to its
+            # fixtures; the text area is editable for narration but does not
+            # currently reshape the scenario fixtures.
             run_scenario(scenario, out_dir=RUNTIME_DIR, seed=int(seed))
             st.success(f"Simulated {scenario} with seed={seed}")
 

@@ -190,29 +190,35 @@ def build_engine(
 # ---------------------------------------------------------------------------
 
 SUBSCRIPTION_MISSION_TEXT = (
-    "Renew active subscriptions up to 15 EUR/month automatically; escalate "
-    "renewals between 15-30 EUR; block anything above 30 EUR or any "
-    "unapproved new service. No sharing of payment data beyond token and "
-    "billing email. Cancel if renewal terms change billing period without "
-    "my approval."
+    "Renew my active subscriptions up to 15 EUR/month automatically; escalate "
+    "renewals between 15-30 EUR; block anything above 30 EUR or any new "
+    "service I have not pre-approved. No sharing of payment data beyond token "
+    "and billing email. Cancel if the renewal silently changes billing period."
 )
 
 
 def build_subscription_context(*, with_approved_services_version: bool = True) -> ConsumerContext:
     """Eva's data foundation for the subscription mission.
 
-    The data_baseline carries the agent's last-known facts. The price for
-    StreamPlus is slightly stale (it has drifted by 10%); the price for
-    MegaBundle is sharply stale (it has jumped well above the block ceiling);
-    AnnualPlus's billing_period on record is monthly even though the service
-    has silently moved to annual. These deliberate mismatches are what the
-    governance moments exercise.
+    The data_baseline carries the agent's last-known facts about each real
+    service in Eva's portfolio. Spotify's price has drifted by ~10% (still
+    within tolerance), DAZN has jumped past the block ceiling, Amazon Prime
+    has silently switched from monthly to annual billing, Apple TV+ is new
+    and not on the approved list, and BundleSavvy is a billing aggregator
+    asking for fields outside the whitelist. These deliberate mismatches
+    are what the governance moments exercise.
     """
 
     delegation_parameters = {
         "monthly_escalate_threshold": 15.0,
         "monthly_block_threshold": 30.0,
-        "approved_services": ["netflix", "streamplus", "megabundle", "annualplus"],
+        "approved_services": [
+            "netflix",
+            "spotify",
+            "dazn",
+            "amazon_prime",
+            "disney_plus",
+        ],
         "blocked_services": [],
         "billing_data_whitelist": ["payment_token", "billing_email"],
     }
@@ -220,10 +226,11 @@ def build_subscription_context(*, with_approved_services_version: bool = True) -
         delegation_parameters["approved_services_version"] = 7
     data_baseline = {
         "subscriptions": {
-            "netflix":    {"monthly_eur": 13.99, "billing_period": "monthly", "fresh": True},
-            "streamplus": {"monthly_eur":  9.99, "billing_period": "monthly", "fresh": True},
-            "megabundle": {"monthly_eur": 19.00, "billing_period": "monthly", "fresh": True},
-            "annualplus": {"monthly_eur": 14.00, "billing_period": "monthly", "fresh": True},
+            "netflix":      {"monthly_eur": 13.99, "billing_period": "monthly", "fresh": True},
+            "spotify":      {"monthly_eur":  9.99, "billing_period": "monthly", "fresh": True},
+            "dazn":         {"monthly_eur": 19.99, "billing_period": "monthly", "fresh": True},
+            "amazon_prime": {"monthly_eur":  8.99, "billing_period": "monthly", "fresh": True},
+            "disney_plus":  {"monthly_eur":  8.99, "billing_period": "monthly", "fresh": True},
         },
     }
     return ConsumerContext(
@@ -262,16 +269,19 @@ def build_subscription_delegation() -> ShoppingDelegation:
 
 
 def build_subscription_services(*, seed=None) -> Dict[str, SubscriptionServiceAgent]:
-    """The retailer-side subscription services, with their current real terms.
+    """Eva's real-world subscription portfolio with the services' current terms.
 
-    Compare these terms against the data_baseline above to see where the
-    agent has stale data:
-      - netflix:    matches baseline
-      - streamplus: +10% from baseline (drift within tolerance)
-      - megabundle: jumped to 34 EUR (over block ceiling)
-      - annualplus: silently switched to annual billing
-      - spotify:    new, not on the approved list
-      - aggregator: a billing aggregator that asks for full card numbers
+    Compare each service's `monthly_eur` against the baseline above to see
+    where Eva's data has drifted from reality. These mismatches are the
+    governance moments the scenario exercises:
+
+      - netflix:       matches baseline                                → ALLOW
+      - spotify:       +10% drift (9.99 → 10.99), within tolerance     → ALLOW_WITH_CONDITIONS
+      - dazn:          jumped to 34.99, over the 30 EUR block ceiling  → BLOCK
+      - apple_tv:      new service, not on the approved list           → ESCALATE
+      - bundle_savvy:  aggregator asking for full card number          → BLOCK
+      - amazon_prime:  silently switched from monthly to annual        → ESCALATE
+      - disney_plus:   used in the incomplete-context moment           → BLOCK_MISSING_CONTEXT
     """
 
     return {
@@ -279,26 +289,30 @@ def build_subscription_services(*, seed=None) -> Dict[str, SubscriptionServiceAg
             service_id="netflix", display_name="Netflix",
             monthly_eur=13.99, billing_period="monthly",
         ),
-        "streamplus": SubscriptionServiceAgent(
-            service_id="streamplus", display_name="StreamPlus",
-            monthly_eur=10.49, billing_period="monthly",  # +5% drift from baseline 9.99
-        ),
-        "megabundle": SubscriptionServiceAgent(
-            service_id="megabundle", display_name="MegaBundle",
-            monthly_eur=34.00, billing_period="monthly",  # jumped past 30 EUR
-        ),
-        "annualplus": SubscriptionServiceAgent(
-            service_id="annualplus", display_name="AnnualPlus",
-            monthly_eur=14.00, billing_period="annual",   # silent period change
-        ),
         "spotify": SubscriptionServiceAgent(
-            service_id="spotify", display_name="Spotify",
-            monthly_eur=9.99, billing_period="monthly",
+            service_id="spotify", display_name="Spotify Premium",
+            monthly_eur=10.49, billing_period="monthly",  # +5% drift, inside 10% tolerance
         ),
-        "aggregator": SubscriptionServiceAgent(
-            service_id="aggregator", display_name="Card Aggregator",
+        "dazn": SubscriptionServiceAgent(
+            service_id="dazn", display_name="DAZN Total",
+            monthly_eur=34.99, billing_period="monthly",  # jumped past 30 EUR ceiling
+        ),
+        "apple_tv": SubscriptionServiceAgent(
+            service_id="apple_tv", display_name="Apple TV+",
+            monthly_eur=9.99, billing_period="monthly",   # not on approved list
+        ),
+        "bundle_savvy": SubscriptionServiceAgent(
+            service_id="bundle_savvy", display_name="BundleSavvy (aggregator)",
             monthly_eur=5.0, billing_period="monthly",
             requires_data_fields=["full_card_number", "billing_email"],
+        ),
+        "amazon_prime": SubscriptionServiceAgent(
+            service_id="amazon_prime", display_name="Amazon Prime",
+            monthly_eur=8.99, billing_period="annual",    # silent period change
+        ),
+        "disney_plus": SubscriptionServiceAgent(
+            service_id="disney_plus", display_name="Disney+",
+            monthly_eur=8.99, billing_period="monthly",
         ),
     }
 

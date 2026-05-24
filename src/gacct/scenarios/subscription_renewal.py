@@ -1,23 +1,19 @@
-"""Subscription renewal - the seven-moment scenario.
+"""Subscription renewal - the seven-moment headline scenario.
 
-Demonstrates the three pillars side-by-side:
+Eva delegates her entire subscription portfolio to the agent. The agent walks
+the portfolio end-to-end (AGENTIC), comparing each service's current terms
+against a versioned ConsumerContext (DATA), and routing every consequential
+step through PAG -> ATM -> PAA (GOVERNANCE).
 
-  AGENTIC  - the agent walks an end-to-end subscription portfolio, querying
-             services, comparing current terms to a versioned baseline, and
-             proposing renewals, cancellations, or escalations as needed.
-  DATA     - the ConsumerContext is the structured foundation. Stale prices,
-             missing fields, and silent term changes are surfaced explicitly.
-  GOVERNANCE - every consequential step routes through the engine; a
-             DataContextValidator gates incomplete contexts before PAG.
+Seven moments, one per real-world service:
 
-Seven moments:
-  1. Netflix renewal (€13.99)                  → ALLOW            [DATA fresh, GOVERNANCE allows]
-  2. StreamPlus renewal (9.99 → 10.99, +10%)   → ALLOW_WITH_COND. [DATA drift detected, condition: log_price_drift]
-  3. MegaBundle renewal (19 → 34)              → BLOCK            [DATA: stale baseline + GOVERNANCE: over ceiling]
-  4. Spotify (new service)                     → ESCALATE         [DATA gap: unknown service]
-  5. Aggregator requests full card number      → BLOCK            [DATA: outside whitelist]
-  6. AnnualPlus billing-period change          → ESCALATE         [DATA: baseline says monthly]
-  7. Action with incomplete context            → BLOCK_MISSING_CONTEXT [DATA: precondition failed]
+  1. Netflix (€13.99)              -> ALLOW                  [under €15 auto-renew threshold]
+  2. Spotify Premium (€10.49,+5%)  -> ALLOW_WITH_CONDITIONS  [drift within tolerance, condition: log_price_drift]
+  3. DAZN Total (€34.99)           -> BLOCK                  [over €30 block ceiling + stale baseline]
+  4. Apple TV+ (new service)       -> ESCALATE               [data gap: not on approved list]
+  5. BundleSavvy aggregator        -> BLOCK                  [data sharing: full card # outside whitelist]
+  6. Amazon Prime monthly->annual  -> ESCALATE               [data: baseline says monthly, service silently switched]
+  7. Disney+ with stale context    -> BLOCK_MISSING_CONTEXT  [data foundation is a governance precondition]
 """
 
 from __future__ import annotations
@@ -56,7 +52,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
             "pillars": {
                 "agentic": "agent walks the full subscription portfolio without per-step approval",
                 "data":    f"ConsumerContext {context.context_id} v{context.context_version}",
-                "governance": "every renewal / share / cancel routed through PAG → ATM → PAA",
+                "governance": "every renewal / share / cancel routed through PAG -> ATM -> PAA",
             },
         },
     )
@@ -80,7 +76,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         on_context_block=store.record_decision,
     )
 
-    # 1. Netflix - fresh data, under threshold → ALLOW
+    # 1. Netflix - fresh data, under threshold -> ALLOW
     netflix = services["netflix"]
     netflix_terms = agent._mcp(netflix, "get_renewal_terms")
     agent.renew_subscription(
@@ -89,64 +85,65 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
         billing_period=netflix_terms["billing_period"],
     )
 
-    # 2. StreamPlus - +10% drift within tolerance → ALLOW_WITH_CONDITIONS
-    streamplus = services["streamplus"]
-    sp_terms = agent._mcp(streamplus, "get_renewal_terms")
+    # 2. Spotify Premium - +10% drift within tolerance -> ALLOW_WITH_CONDITIONS
+    spotify = services["spotify"]
+    sp_terms = agent._mcp(spotify, "get_renewal_terms")
     agent.renew_subscription(
-        scenario_id=SCENARIO_ID, service=streamplus,
+        scenario_id=SCENARIO_ID, service=spotify,
         monthly_eur=sp_terms["monthly_eur"],
         billing_period=sp_terms["billing_period"],
         log_price_drift=True,
     )
-    # The agent now updates its baseline forward so future steps see the new price.
+    # Agent updates its baseline so future steps see the new Spotify price.
     agent.context = agent.context.bumped(subscriptions={
         **agent.context.data_baseline["subscriptions"],
-        "streamplus": {"monthly_eur": sp_terms["monthly_eur"], "billing_period": "monthly", "fresh": True},
+        "spotify": {"monthly_eur": sp_terms["monthly_eur"], "billing_period": "monthly", "fresh": True},
     })
 
-    # 3. MegaBundle - jumped past block ceiling → BLOCK
-    megabundle = services["megabundle"]
-    mb_terms = agent._mcp(megabundle, "get_renewal_terms")
+    # 3. DAZN Total - jumped past block ceiling -> BLOCK
+    dazn = services["dazn"]
+    dazn_terms = agent._mcp(dazn, "get_renewal_terms")
     agent.renew_subscription(
-        scenario_id=SCENARIO_ID, service=megabundle,
-        monthly_eur=mb_terms["monthly_eur"],
-        billing_period=mb_terms["billing_period"],
+        scenario_id=SCENARIO_ID, service=dazn,
+        monthly_eur=dazn_terms["monthly_eur"],
+        billing_period=dazn_terms["billing_period"],
     )
 
-    # 4. Spotify - unknown service → ESCALATE (data gap)
-    spotify = services["spotify"]
-    spot_terms = agent._mcp(spotify, "get_renewal_terms")
+    # 4. Apple TV+ - unknown service, not on approved list -> ESCALATE
+    apple_tv = services["apple_tv"]
+    apple_terms = agent._mcp(apple_tv, "get_renewal_terms")
     agent.renew_subscription(
-        scenario_id=SCENARIO_ID, service=spotify,
-        monthly_eur=spot_terms["monthly_eur"],
-        billing_period=spot_terms["billing_period"],
+        scenario_id=SCENARIO_ID, service=apple_tv,
+        monthly_eur=apple_terms["monthly_eur"],
+        billing_period=apple_terms["billing_period"],
     )
 
-    # 5. Aggregator requests full card number → BLOCK (data sharing whitelist)
-    aggregator = services["aggregator"]
+    # 5. BundleSavvy aggregator requests full card number -> BLOCK
+    aggregator = services["bundle_savvy"]
     agg_terms = agent._mcp(aggregator, "get_renewal_terms")
     agent.share_billing_data(
         scenario_id=SCENARIO_ID, service=aggregator,
         data_fields_requested=agg_terms["requires_data_fields"],
     )
 
-    # 6. AnnualPlus - silently switched to annual billing → ESCALATE (data: baseline says monthly)
-    annualplus = services["annualplus"]
-    ap_terms = agent._mcp(annualplus, "get_renewal_terms")
+    # 6. Amazon Prime - silently switched from monthly to annual -> ESCALATE
+    prime = services["amazon_prime"]
+    prime_terms = agent._mcp(prime, "get_renewal_terms")
     agent.renew_subscription(
-        scenario_id=SCENARIO_ID, service=annualplus,
-        monthly_eur=ap_terms["monthly_eur"],
-        billing_period=ap_terms["billing_period"],
+        scenario_id=SCENARIO_ID, service=prime,
+        monthly_eur=prime_terms["monthly_eur"],
+        billing_period=prime_terms["billing_period"],
     )
 
-    # 7. Incomplete context - clear the approved_services_version field
-    # and try to renew → BLOCK_MISSING_CONTEXT before PAG is reached.
+    # 7. Disney+ renewal against an incomplete context
+    # (missing approved_services_version) -> BLOCK_MISSING_CONTEXT
     stale_context = build_subscription_context(with_approved_services_version=False)
     agent.context = stale_context
+    disney = services["disney_plus"]
     agent.renew_subscription(
-        scenario_id=SCENARIO_ID, service=netflix,
-        monthly_eur=netflix.monthly_eur,
-        billing_period=netflix.billing_period,
+        scenario_id=SCENARIO_ID, service=disney,
+        monthly_eur=disney.monthly_eur,
+        billing_period=disney.billing_period,
     )
 
     store.record_event(

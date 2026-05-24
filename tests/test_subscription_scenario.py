@@ -67,37 +67,37 @@ def test_moment_1_netflix_allowed_within_threshold(scenario_decisions):
     assert matches[0]["detail"]["decision"] == Decision.ALLOW.value
 
 
-def test_moment_2_streamplus_conditional_under_drift_tolerance(scenario_decisions):
-    """+5% price drift within tolerance → ALLOW_WITH_CONDITIONS (log_price_drift)."""
+def test_moment_2_spotify_conditional_under_drift_tolerance(scenario_decisions):
+    """+5% price drift within 10% tolerance → ALLOW_WITH_CONDITIONS (log_price_drift)."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
-               if "service=streamplus" in d["detail"]["action_payload_summary"]]
+               if "service=spotify" in d["detail"]["action_payload_summary"]]
     assert matches
     d = matches[0]["detail"]
     assert d["decision"] == Decision.ALLOW_WITH_CONDITIONS.value
     assert d["conditions"], "expected an explicit condition on the record"
 
 
-def test_moment_3_megabundle_blocked_over_ceiling(scenario_decisions):
-    """Baseline says €19/mo; service now charges €34 - over the €30 block ceiling."""
+def test_moment_3_dazn_blocked_over_ceiling(scenario_decisions):
+    """Baseline says €19.99/mo; service now charges €34.99 - over the €30 block ceiling."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
-               if "service=megabundle" in d["detail"]["action_payload_summary"]]
+               if "service=dazn" in d["detail"]["action_payload_summary"]]
     assert matches
     assert matches[0]["detail"]["decision"] == Decision.BLOCK.value
 
 
-def test_moment_4_spotify_escalates_unknown_service(scenario_decisions):
+def test_moment_4_apple_tv_escalates_unknown_service(scenario_decisions):
     """Service not on approved_services → ESCALATE (data gap, agent has no authority yet)."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
-               if "service=spotify" in d["detail"]["action_payload_summary"]]
+               if "service=apple_tv" in d["detail"]["action_payload_summary"]]
     assert matches
     assert matches[0]["detail"]["decision"] == Decision.ESCALATE.value
 
 
 def test_moment_5_aggregator_full_card_blocked(scenario_decisions):
-    """Aggregator demanded full_card_number - outside the billing-data whitelist."""
+    """BundleSavvy aggregator demanded full_card_number - outside the billing-data whitelist."""
 
     matches = _by_action(scenario_decisions, "share_billing_data")
     assert matches
@@ -105,11 +105,11 @@ def test_moment_5_aggregator_full_card_blocked(scenario_decisions):
     assert "full_card_number" in str(matches[0]["detail"].get("facts_used"))
 
 
-def test_moment_6_annualplus_billing_period_change_escalates(scenario_decisions):
-    """Baseline says 'monthly'; service silently switched to 'annual'."""
+def test_moment_6_amazon_prime_billing_period_change_escalates(scenario_decisions):
+    """Amazon Prime baseline says 'monthly'; service silently switched to 'annual'."""
 
     matches = [d for d in _by_action(scenario_decisions, "renew_subscription")
-               if "service=annualplus" in d["detail"]["action_payload_summary"]]
+               if "service=amazon_prime" in d["detail"]["action_payload_summary"]]
     assert matches
     assert matches[0]["detail"]["decision"] == Decision.ESCALATE.value
 
