@@ -1,5 +1,9 @@
 # Governed Agentic Commerce Control Tower
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ecommerce-agentic.streamlit.app/)
+
+**Live demo:** <https://ecommerce-agentic.streamlit.app/>
+
 This repository demonstrates how a consumer can delegate shopping tasks to an AI agent without delegating accountability.
 
 Agentic AI can execute a consumer's mission end-to-end - but only if it operates on curated, contextualized consumer data, and only if its delegated authority is bounded by a runtime governance layer. This repository demonstrates all three: autonomous agentic action, structured consumer context as the data foundation, and SARC-style governance as the accountability layer. Governance is enforced at explicitly wrapped action boundaries only. The repository is a simulated environment, not a production-certified commerce system, and is not a universal governance layer for arbitrary agents or frameworks. The goal is to demonstrate a runtime pattern in which a capable agent, operating on a versioned data foundation, has its delegated action intercepted, evaluated, escalated, and evidenced before any consequential effect leaves the consumer-agent boundary.
@@ -83,7 +87,7 @@ These bounds map directly to the policy packs in `policies/`. The scenarios in `
 
 ## 6. How to run
 
-The demo runs locally without any API keys. No external LLM is called.
+The fastest path is the hosted demo: <https://ecommerce-agentic.streamlit.app/>. To run locally, no API keys are required - no external LLM is called.
 
 ```bash
 # 1. Install
