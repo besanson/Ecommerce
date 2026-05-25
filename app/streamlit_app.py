@@ -244,6 +244,17 @@ CUSTOM_CSS = f"""
   letter-spacing: 0.05em; text-align: center;
   padding: 4px 6px; border-radius: 4px; margin-top: 8px;
 }}
+.moment-glyph {{
+  font-size: 0.82rem; font-weight: 800; margin-right: 2px;
+}}
+/* Hero tagline + pillar tooltips */
+.hero .tagline {{
+  color: #eceff1; font-size: 1.0rem; font-weight: 500;
+  margin: 4px 0 8px 0;
+}}
+.hero .pillar {{
+  border-bottom: 1px dotted currentColor; cursor: help;
+}}
 @media (max-width: 1100px) {{
   .story-arc {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
 }}
@@ -564,15 +575,25 @@ def render_system_map(events: List[dict], selected: Optional[dict]) -> None:
         for nodes in rank_groups.values()
     )
 
+    node_tooltips = {
+        "consumer": "Oli - the delegating human. Authority for every action traces back here.",
+        "consumer_agent": "The AI agent acting on Oli's behalf. Walks the portfolio, proposes actions, never executes without governance approval.",
+        "governance": "SARC runtime layer: PAG checks delegated authority before the action, ATM verifies conditions at execute time, PAA writes the audit record.",
+        "approval": "Human-in-the-loop channel. PAG hands escalations here when the action exceeds standing authority. ATM blocks execution until APPROVED or REJECTED returns.",
+        "trace_store": "Append-only event log. Every governed action, every MCP message, every reasoning step. The artifact a regulator or dispute reviewer would actually read.",
+        "retailer_agent": "Subscription service (Netflix, Spotify, etc.) reached over MCP - the Model Context Protocol wire. Only invoked when the governance layer authorizes.",
+        "payment_boundary": "Where the billing token (or a Shared Payment Token, in a production stack) crosses to the merchant side. Scope and lifecycle are policy-bound.",
+    }
     node_lines = []
     for n in NODE_POSITIONS:
         fill = node_fill[n]
         text_color = "white"
+        tooltip = node_tooltips.get(n, "").replace('"', '\\"')
         node_lines.append(
             f'    {n} [label="{_esc(NODE_LABELS[n])}", '
             f'fillcolor="{fill}", fontcolor="{text_color}", '
             f'style="filled,rounded", shape=box, fontname="Helvetica-Bold", '
-            f'fontsize=12, margin="0.18,0.10"];'
+            f'fontsize=12, margin="0.18,0.10", tooltip="{tooltip}"];'
         )
 
     edge_lines = []
@@ -603,13 +624,21 @@ def render_system_map(events: List[dict], selected: Optional[dict]) -> None:
     st.graphviz_chart(dot, use_container_width=True)
 
     legend = (
-        f"<span style='color:{C_ALLOW}'>● allowed</span> &nbsp; "
-        f"<span style='color:{C_ESC}'>● requires approval</span> &nbsp; "
-        f"<span style='color:{C_BLOCK}'>● blocked</span> &nbsp; "
-        f"<span style='color:{C_COND}'>● conditional</span> &nbsp; "
+        f"<span style='color:{C_ALLOW}'>✓ allowed</span> &nbsp; "
+        f"<span style='color:{C_COND}'>ⓘ conditional</span> &nbsp; "
+        f"<span style='color:{C_ESC}'>⚠ requires approval</span> &nbsp; "
+        f"<span style='color:{C_BLOCK}'>✕ blocked</span> &nbsp; "
         f"<span style='color:{C_NEUTRAL}'>● structural</span>"
     )
-    st.markdown(f"<div style='text-align:right; font-size:0.78rem;'>{legend}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='text-align:right; font-size:0.78rem;'>{legend}</div>"
+        "<div style='font-size:0.78rem; color:#546e7a; margin-top:6px;'>"
+        "Hover any node for a definition. <b>MCP</b> = Model Context Protocol, "
+        "the wire over which the consumer agent talks to subscription services. "
+        "<b>PAG / ATM / PAA</b> = Pre-Action Gate, Action-Time Monitor, "
+        "Post-Action Audit - the three stages of SARC runtime governance.</div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -708,11 +737,10 @@ def render_mission_status_banner(events: List[dict]) -> None:
 def render_story_arc(events: List[dict]) -> None:
     """Seven moments at a glance.
 
-    The single most important piece of orientation for someone landing on the
-    app cold: a horizontal strip of one card per moment, naming the service,
-    the trigger, and the verdict in color. The order is the order the agent
-    walked the portfolio. Lets a reader grasp the whole story in 10 seconds
-    before scrolling into the ledger / network / forensics.
+    Rendered as a single-line HTML string per card. CommonMark treats lines
+    indented by 4+ spaces as code blocks, which is why earlier multi-line
+    f-strings showed up as raw tags in the deployed app - the markdown
+    parser saw the indented div content and escaped it.
     """
 
     records = _decision_records(events)
@@ -745,6 +773,15 @@ def render_story_arc(events: List[dict]) -> None:
         "amazon_prime": "silent monthly → annual",
         "disney_plus": "stale ConsumerContext",
     }
+    # Colour-blind safety: pair each verdict with a glyph so the cards do
+    # not rely on colour alone.
+    verdict_glyphs = {
+        "allow": "✓",
+        "allow_with_conditions": "ⓘ",
+        "escalate": "⚠",
+        "block": "✕",
+        "block_missing_context": "⊘",
+    }
 
     cards = []
     for i, r in enumerate(records, start=1):
@@ -753,22 +790,28 @@ def render_story_arc(events: List[dict]) -> None:
         trigger = triggers.get(svc, r.intended_action)
         verdict = r.decision.value
         color = DECISION_COLORS.get(verdict, C_NEUTRAL)
+        glyph = verdict_glyphs.get(verdict, "•")
         verdict_label = DECISION_SHORT.get(verdict, verdict).upper()
         cards.append(
-            f"""
-            <div class="moment-card" style="border-left: 6px solid {color};">
-              <div class="moment-num">{i}</div>
-              <div class="moment-name">{name}</div>
-              <div class="moment-trigger">{trigger}</div>
-              <div class="moment-verdict" style="background:{color};">{verdict_label}</div>
-            </div>
-            """
+            '<div class="moment-card" style="border-left: 6px solid {color};">'
+            '<div class="moment-num">{i:02d}</div>'
+            '<div class="moment-name">{name}</div>'
+            '<div class="moment-trigger">{trigger}</div>'
+            '<div class="moment-verdict" style="background:{color};">'
+            '<span class="moment-glyph">{glyph}</span> {label}</div>'
+            '</div>'.format(
+                color=color, i=i, name=name, trigger=trigger,
+                glyph=glyph, label=verdict_label,
+            )
         )
 
-    st.markdown(
+    label_html = (
         '<div class="story-arc-label">The seven moments of Oli\'s portfolio renewal '
-        '<span style="color:#90a4ae;font-weight:400;">- left to right, as the agent walked them</span></div>'
-        '<div class="story-arc">' + "".join(cards) + '</div>',
+        '<span style="color:#90a4ae;font-weight:400;">- left to right, as the agent walked them</span>'
+        '</div>'
+    )
+    st.markdown(
+        label_html + '<div class="story-arc">' + "".join(cards) + '</div>',
         unsafe_allow_html=True,
     )
 
@@ -1137,8 +1180,25 @@ def main() -> None:
             "Consumer says (free text)",
             value=SUBSCRIPTION_MISSION_TEXT,
             height=140,
+            placeholder=(
+                'Example: "Renew all video and music subscriptions under '
+                '€15/month automatically; escalate €15-€30; block above '
+                '€30 or any new service I have not pre-approved."'
+            ),
+            help=(
+                "What the consumer told the agent to do, in plain language. "
+                "The same delegation in structured form is shown in section 1 "
+                "(Mission) of the page."
+            ),
         )
-        seed = st.number_input("Random seed", min_value=0, max_value=2**31 - 1, value=42, step=1)
+        seed = st.number_input(
+            "Random seed", min_value=0, max_value=2**31 - 1, value=42, step=1,
+            help=(
+                "Controls deterministic randomness inside the simulation "
+                "(retailer ordering, ID generation). Same seed + same fixtures "
+                "produce identical traces. Useful for reproducible demos."
+            ),
+        )
         if st.button("Re-run mission", use_container_width=True):
             RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
             target = RUNTIME_DIR / f"{scenario}.jsonl"
@@ -1158,16 +1218,46 @@ def main() -> None:
     sb = brief(scenario)
     state = _scenario_aggregate_state(events) if events else "allow"
     accent = DECISION_COLORS.get(state, C_NEUTRAL)
-    st.markdown(
-        f"""
-        <div class="hero">
-          <h1>Governed Agentic Commerce · Control Tower</h1>
-          <div class="sub">Three pillars, equally visible: <span style="color:#7eb6ff;font-weight:700;">AGENTIC</span> - agents can execute a consumer's mission end-to-end; <span style="color:#b39ddb;font-weight:700;">DATA</span> - they do so on a structured, versioned consumer context; <span style="color:#cfd8dc;font-weight:700;">GOVERNANCE</span> - every consequential step is intercepted by a SARC-style runtime layer that allows, blocks, escalates, or conditionally allows it. Every material decision leaves evidence.</div>
-          <div class="meta">Scenario: <b>{sb.title if sb else scenario}</b> &nbsp;·&nbsp; {sb.subtitle if sb else ""} &nbsp;·&nbsp; <span style="color:{accent}; font-weight:700;">{DECISION_LABELS.get(state, '').lower()}</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    pillar_agentic = (
+        '<span class="pillar" style="color:#7eb6ff;font-weight:700;" '
+        'title="AGENTIC - the agent walks the full mission end-to-end '
+        'without per-step human approval, executing every consequential '
+        'action within the boundaries it was given.">AGENTIC</span>'
     )
+    pillar_data = (
+        '<span class="pillar" style="color:#b39ddb;font-weight:700;" '
+        'title="DATA - every action is evaluated against a versioned '
+        'ConsumerContext that captures the user&#39;s baseline facts, '
+        'preferences, and last-known service terms. If the context is '
+        'incomplete, the action is refused before policy is even consulted.'
+        '">DATA</span>'
+    )
+    pillar_gov = (
+        '<span class="pillar" style="color:#cfd8dc;font-weight:700;" '
+        'title="GOVERNANCE - every consequential action passes through '
+        'PAG (Pre-Action Gate), ATM (Action-Time Monitor), and PAA '
+        '(Post-Action Audit). Verdicts are ALLOW, ALLOW_WITH_CONDITIONS, '
+        'ESCALATE, BLOCK, or BLOCK_MISSING_CONTEXT.">GOVERNANCE</span>'
+    )
+    hero_html = (
+        '<div class="hero">'
+        '<h1>Governed Agentic Commerce · Control Tower</h1>'
+        '<div class="tagline">Let your agent renew your subscriptions on your '
+        'behalf - but only within the budget, the data limits, and the policy '
+        'boundaries you set.</div>'
+        '<div class="sub">Three pillars, equally visible: '
+        + pillar_agentic + ' - agents can execute a consumer&#39;s mission end-to-end; '
+        + pillar_data + ' - they do so on a structured, versioned consumer context; '
+        + pillar_gov + ' - every consequential step is intercepted by a SARC-style '
+        'runtime layer that allows, blocks, escalates, or conditionally allows it. '
+        'Every material decision leaves evidence.</div>'
+        f'<div class="meta">Scenario: <b>{sb.title if sb else scenario}</b> '
+        f'&nbsp;·&nbsp; {sb.subtitle if sb else ""} &nbsp;·&nbsp; '
+        f'<span style="color:{accent}; font-weight:700;">'
+        f'{DECISION_LABELS.get(state, "").lower()}</span></div>'
+        '</div>'
+    )
+    st.markdown(hero_html, unsafe_allow_html=True)
 
     if not events:
         st.warning(
