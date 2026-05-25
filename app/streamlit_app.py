@@ -835,16 +835,24 @@ def render_sarc_strip() -> None:
 
 
 def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[int]:
-    """Render the ledger. Returns the selected row index (0-based) or None."""
+    """Render the ledger with filter pills, sort selector, and a download.
+
+    Returns the index (into the *unfiltered* decisions list) of the selected
+    row, or None. The filter and sort affect only the visible rows; the
+    caller's selection logic stays unambiguous against the original sequence.
+    """
 
     if not decisions:
         st.info("No governed actions in this scenario.")
         return None
-    rows = []
+
+    # ---- Build the full row set first (so filters operate on enriched data)
+    full_rows = []
     for i, e in enumerate(decisions):
         d = e["detail"]
         tags = pillar_tags(d["intended_action"])
-        rows.append({
+        full_rows.append({
+            "_orig_idx": i,
             "Time": d["timestamp"].split("T")[1][:8] if "T" in d["timestamp"] else d["timestamp"][:8],
             "Pillars": " · ".join(tags) if tags else "-",
             "Actor": d["actor"],
@@ -857,7 +865,66 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
             "Governance outcome": d["execution_outcome"][:80],
             "_decision_raw": d["decision"],
         })
-    df = pd.DataFrame(rows)
+
+    # ---- Filter + sort controls
+    verdict_options = [
+        ("Allowed", "allow"),
+        ("Conditional", "allow_with_conditions"),
+        ("Escalated", "escalate"),
+        ("Blocked", "block"),
+        ("Data missing", "block_missing_context"),
+    ]
+    available_verdicts = {r["_decision_raw"] for r in full_rows}
+    selectable = [(lbl, v) for (lbl, v) in verdict_options if v in available_verdicts]
+
+    ctl_a, ctl_b, ctl_c = st.columns([3, 2, 1])
+    with ctl_a:
+        picked = st.multiselect(
+            "Filter by decision",
+            options=[lbl for lbl, _ in selectable],
+            default=[lbl for lbl, _ in selectable],
+            key=f"{state_key}_filter",
+            help="Show only decisions of the picked verdict(s). All on by default.",
+        )
+    with ctl_b:
+        sort_choice = st.selectbox(
+            "Sort by",
+            options=["Order in scenario", "Decision severity", "Service / action"],
+            index=0,
+            key=f"{state_key}_sort",
+            help=(
+                "Order in scenario keeps the agent's walk order. "
+                "Decision severity puts blocks first, then escalations, "
+                "then conditionals, then allows. Service / action groups by "
+                "the intended action and the target service."
+            ),
+        )
+    picked_raw = {v for (lbl, v) in selectable if lbl in picked} or available_verdicts
+
+    rows = [r for r in full_rows if r["_decision_raw"] in picked_raw]
+    if sort_choice == "Decision severity":
+        severity = {
+            "block_missing_context": 0, "block": 1, "escalate": 2,
+            "allow_with_conditions": 3, "allow": 4,
+        }
+        rows.sort(key=lambda r: (severity.get(r["_decision_raw"], 99), r["_orig_idx"]))
+    elif sort_choice == "Service / action":
+        rows.sort(key=lambda r: (r["Intended action"], r["Governance outcome"]))
+    # else: keep _orig_idx order, which is insertion order
+
+    with ctl_c:
+        st.markdown(
+            f"<div style='font-size:0.78rem;color:#546e7a;padding-top:1.7rem;'>"
+            f"showing <b>{len(rows)}</b> of {len(full_rows)}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    if not rows:
+        st.info("No decisions match the current filter.")
+        return None
+
+    df = pd.DataFrame(rows).drop(columns=["_decision_raw", "_orig_idx"])
 
     _DEC_RAW = {
         "Allowed": "allow", "Conditional": "allow_with_conditions",
@@ -868,11 +935,7 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
         col = DECISION_COLORS.get(_DEC_RAW.get(val, ""), "#90a4ae")
         return f"background-color: {col}; color: white; font-weight: 700; text-align: center;"
 
-    styled = (
-        df.drop(columns=["_decision_raw"])
-          .style
-          .map(_color_decision, subset=["Decision"])
-    )
+    styled = df.style.map(_color_decision, subset=["Decision"])
 
     event = st.dataframe(
         styled,
@@ -882,14 +945,62 @@ def render_decision_ledger(decisions: List[dict], state_key: str) -> Optional[in
         selection_mode="single-row",
         key=state_key,
     )
+
+    # Download
+    import json as _json
+    decisions_json = _json.dumps(
+        [e["detail"] for e in decisions], indent=2, default=str,
+    )
+    st.download_button(
+        label="Download decision records (JSON)",
+        data=decisions_json,
+        file_name="decision_records.json",
+        mime="application/json",
+        help="Raw DecisionRecord objects for every governed action in this scenario, ordered as the agent walked them.",
+    )
+
     if event and event.selection and event.selection.rows:
-        return event.selection.rows[0]
+        visible_idx = event.selection.rows[0]
+        # Map the visible row index back to the original decisions index.
+        return rows[visible_idx]["_orig_idx"]
     return None
 
 
 # ---------------------------------------------------------------------------
 # Commerce cockpit
 # ---------------------------------------------------------------------------
+
+
+def _service_from_summary(summary: Optional[str]) -> str:
+    if not summary:
+        return ""
+    for tok in summary.split():
+        if tok.startswith("service="):
+            return tok.split("=", 1)[1]
+    return ""
+
+
+def _monthly_from_summary(summary: Optional[str]) -> float:
+    if not summary:
+        return 0.0
+    for tok in summary.split():
+        if tok.startswith("monthly_eur="):
+            try:
+                return float(tok.split("=", 1)[1])
+            except ValueError:
+                return 0.0
+    return 0.0
+
+
+_SERVICE_DISPLAY_NAMES = {
+    "netflix": "Netflix",
+    "spotify": "Spotify Premium",
+    "dazn": "DAZN Total",
+    "apple_tv": "Apple TV+",
+    "bundle_savvy": "BundleSavvy",
+    "amazon_prime": "Amazon Prime",
+    "disney_plus": "Disney+",
+}
 
 
 def render_cockpit(events: List[dict]) -> None:
@@ -909,14 +1020,7 @@ def render_cockpit(events: List[dict]) -> None:
     for r in records:
         if r.intended_action != "renew_subscription":
             continue
-        summary = r.action_payload_summary or ""
-        monthly = 0.0
-        for tok in summary.split():
-            if tok.startswith("monthly_eur="):
-                try:
-                    monthly = float(tok.split("=", 1)[1])
-                except ValueError:
-                    monthly = 0.0
+        monthly = _monthly_from_summary(r.action_payload_summary)
         if r.atm_status == "executed":
             authorized_monthly += monthly
         elif r.decision.value in ("block", "block_missing_context", "escalate"):
@@ -941,6 +1045,80 @@ def render_cockpit(events: List[dict]) -> None:
         f"€{prevented_monthly:,.2f}",
         help="Sum of subscription renewals governance blocked, escalated, or refused for missing context.",
     )
+
+    # Per-service ceiling progress bar. The budget ceiling here is per-service
+    # (€30 monthly_block_threshold), so the most expensive authorized service
+    # is the right reading. Defensively cap the ratio at 1.0 for display.
+    per_service_authorized = []
+    for r in records:
+        if r.intended_action != "renew_subscription" or r.atm_status != "executed":
+            continue
+        svc = _service_from_summary(r.action_payload_summary)
+        per_service_authorized.append(
+            (svc, _monthly_from_summary(r.action_payload_summary))
+        )
+    if per_service_authorized:
+        worst_svc, worst_monthly = max(per_service_authorized, key=lambda t: t[1])
+        ratio = min(worst_monthly / delegation.budget_ceiling_eur, 1.0) if delegation.budget_ceiling_eur else 0.0
+        worst_name = _SERVICE_DISPLAY_NAMES.get(worst_svc, worst_svc)
+        st.markdown(
+            f"<div style='font-size:0.82rem;color:#37474f;margin-top:8px;margin-bottom:4px;'>"
+            f"Highest authorized monthly charge: <b>{worst_name}</b> at "
+            f"<b>€{worst_monthly:,.2f}</b> against the €{delegation.budget_ceiling_eur:,.0f} per-service ceiling."
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        st.progress(ratio)
+
+    # ---- Per-service breakdown -------------------------------------------
+    # One row per service the agent touched in this scenario. Aggregates by
+    # service id so that if the same service appears twice (e.g. the Disney+
+    # block-missing-context retry), both attempts are visible.
+    breakdown: List[Dict] = []
+    for r in records:
+        svc = _service_from_summary(r.action_payload_summary)
+        if not svc:
+            # share_billing_data records don't carry a service= field in their
+            # payload summary; surface them anyway with a synthetic label.
+            svc = r.intended_action
+            display = r.intended_action
+        else:
+            display = _SERVICE_DISPLAY_NAMES.get(svc, svc)
+        monthly = _monthly_from_summary(r.action_payload_summary)
+        verdict = r.decision.value
+        color = DECISION_COLORS.get(verdict, C_NEUTRAL)
+        verdict_label = DECISION_SHORT.get(verdict, verdict)
+        breakdown.append({
+            "Service": display,
+            "Action": r.intended_action,
+            "Monthly (€)": f"{monthly:,.2f}" if monthly else "-",
+            "Verdict": verdict_label,
+            "Executed?": "yes" if r.atm_status == "executed" else "no",
+            "_verdict_raw": verdict,
+            "_color": color,
+        })
+
+    if breakdown:
+        st.markdown(
+            "<div style='font-size:0.95rem;font-weight:700;color:#1a2530;margin-top:18px;margin-bottom:6px;'>"
+            "Per-service breakdown</div>",
+            unsafe_allow_html=True,
+        )
+        bdf = pd.DataFrame(breakdown).drop(columns=["_verdict_raw", "_color"])
+
+        def _color_verdict(val):
+            raw = next(
+                (b["_verdict_raw"] for b in breakdown if DECISION_SHORT.get(b["_verdict_raw"]) == val),
+                None,
+            )
+            col = DECISION_COLORS.get(raw, "#90a4ae")
+            return f"background-color: {col}; color: white; font-weight: 700; text-align: center;"
+
+        st.dataframe(
+            bdf.style.map(_color_verdict, subset=["Verdict"]),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 # ---------------------------------------------------------------------------
