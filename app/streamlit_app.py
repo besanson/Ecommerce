@@ -27,9 +27,7 @@ for _mod in list(sys.modules):
 
 from typing import Dict, List, Optional, Tuple  # noqa: E402
 
-import networkx as nx  # noqa: E402
 import pandas as pd  # noqa: E402
-import plotly.graph_objects as go  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from gacct.domain.decisions import DecisionRecord  # noqa: E402
@@ -208,6 +206,51 @@ CUSTOM_CSS = f"""
 .hero .sub {{ color: #b0bec5; font-size: 0.92rem; }}
 .hero .meta {{ color: #cfd8dc; font-size: 0.82rem; margin-top: 6px; }}
 
+/* Story arc - seven moments at a glance */
+.story-arc-label {{
+  font-size: 0.95rem; font-weight: 700; color: #263238;
+  margin: 18px 0 8px 0;
+}}
+.story-arc {{
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}}
+.moment-card {{
+  background: #ffffff;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  padding: 10px 10px 12px 12px;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 110px;
+}}
+.moment-num {{
+  font-size: 0.7rem; color: #90a4ae; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}}
+.moment-name {{
+  font-size: 0.88rem; font-weight: 700; color: #1a2530;
+  margin-top: 2px; line-height: 1.15;
+}}
+.moment-trigger {{
+  color: #546e7a; margin-top: 4px; line-height: 1.25;
+  flex-grow: 1;
+}}
+.moment-verdict {{
+  color: white; font-weight: 800; font-size: 0.66rem;
+  letter-spacing: 0.05em; text-align: center;
+  padding: 4px 6px; border-radius: 4px; margin-top: 8px;
+}}
+@media (max-width: 1100px) {{
+  .story-arc {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }}
+}}
+@media (max-width: 680px) {{
+  .story-arc {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+}}
+
 /* Section headers */
 .section-h {{
   margin: 18px 0 6px 0;
@@ -372,13 +415,13 @@ NODE_POSITIONS = {
     "payment_boundary":  (0.85, 0.32),
 }
 NODE_LABELS = {
-    "consumer": "Consumer",
+    "consumer": "Consumer\n(Eva)",
     "consumer_agent": "Consumer\nAgent",
     "governance": "Governance\nPAG · ATM · PAA",
     "approval": "Approval\nService",
     "trace_store": "Trace Store\n(evidence)",
-    "retailer_agent": "Retailer Agent\n(MCP)",
-    "payment_boundary": "Payment Token\nBoundary",
+    "retailer_agent": "Subscription\nService (MCP)",
+    "payment_boundary": "Billing Token\nBoundary",
 }
 EDGES = [
     ("consumer", "consumer_agent",     "delegates"),
@@ -470,11 +513,17 @@ def _selected_edge_color(selected: Optional[dict]) -> Tuple[Dict[Tuple[str, str]
 
 
 def render_system_map(events: List[dict], selected: Optional[dict]) -> None:
+    """Subscription-domain system map rendered with Graphviz.
+
+    Replaces the prior Plotly scatter (labels were illegible at the default
+    chart height). Graphviz lays the nodes out cleanly left-to-right with
+    proper line breaks and arrowheads, and Streamlit renders DOT natively.
+    """
+
     if selected is not None:
         edge_color_map, accent = _selected_edge_color(selected)
     else:
         edge_color_map = _scenario_edge_summary(events)
-        # Find the strongest color present for governance-node tint
         accent = C_NEUTRAL
         for col in edge_color_map.values():
             if col == C_BLOCK:
@@ -486,58 +535,73 @@ def render_system_map(events: List[dict], selected: Optional[dict]) -> None:
             if col == C_ALLOW and accent == C_NEUTRAL:
                 accent = C_ALLOW
 
-    g = nx.DiGraph()
+    node_fill: Dict[str, str] = {}
     for n in NODE_POSITIONS:
-        g.add_node(n)
-    for s, t, _label in EDGES:
-        g.add_edge(s, t)
-
-    edge_traces = []
-    arrow_annotations = []
-    for s, t, label in EDGES:
-        x0, y0 = NODE_POSITIONS[s]
-        x1, y1 = NODE_POSITIONS[t]
-        col = edge_color_map.get((s, t))
-        is_active = col is not None
-        line_color = col if is_active else C_NEUTRAL_LIGHT
-        line_width = 4 if is_active else 1.1
-        edge_traces.append(go.Scatter(
-            x=[x0, x1, None], y=[y0, y1, None],
-            mode="lines",
-            line=dict(width=line_width, color=line_color),
-            hoverinfo="text", text=label, showlegend=False,
-        ))
-        if is_active:
-            arrow_annotations.append(dict(
-                ax=x0, ay=y0, x=x1, y=y1, xref="x", yref="y", axref="x", ayref="y",
-                showarrow=True, arrowhead=3, arrowsize=1.6, arrowwidth=2, arrowcolor=line_color,
-            ))
-
-    node_x, node_y, labels, fill, border = [], [], [], [], []
-    for n, (x, y) in NODE_POSITIONS.items():
-        node_x.append(x); node_y.append(y); labels.append(NODE_LABELS[n])
         if n == "governance":
-            fill.append(accent); border.append("#1a2530")
+            node_fill[n] = accent
         elif n == "approval" and selected and selected["detail"]["decision"] == "escalate":
-            fill.append(C_ESC); border.append("#1a2530")
-        elif n == "trace_store":
-            fill.append(C_NEUTRAL); border.append("#1a2530")
+            node_fill[n] = C_ESC
         elif n == "consumer":
-            fill.append("#37474f"); border.append("#1a2530")
-        elif n == "consumer_agent" or n == "retailer_agent":
-            fill.append("#1f3a52"); border.append("#0d2233")
+            node_fill[n] = "#37474f"
+        elif n in ("consumer_agent", "retailer_agent"):
+            node_fill[n] = "#1f3a52"
         else:
-            fill.append(C_NEUTRAL); border.append("#1a2530")
+            node_fill[n] = C_NEUTRAL
 
-    node_trace = go.Scatter(
-        x=node_x, y=node_y, mode="markers+text",
-        marker=dict(size=66, color=fill, line=dict(width=2, color=border)),
-        text=labels, textposition="middle center",
-        textfont=dict(size=10, color="white", family="Arial Black"),
-        hoverinfo="text", showlegend=False,
+    def _esc(label: str) -> str:
+        # graphviz line break is \\l (left) or \\n (center); Streamlit's DOT
+        # interpreter accepts \n as a literal newline if double-escaped.
+        return label.replace("\n", "\\n")
+
+    rank_groups = {
+        "left":   ["consumer"],
+        "mid_l":  ["consumer_agent"],
+        "center": ["approval", "governance", "trace_store"],
+        "right":  ["retailer_agent", "payment_boundary"],
+    }
+    same_rank_lines = "\n".join(
+        f'    {{ rank=same; {"; ".join(nodes)} }}'
+        for nodes in rank_groups.values()
     )
 
-    # Legend annotation (top right)
+    node_lines = []
+    for n in NODE_POSITIONS:
+        fill = node_fill[n]
+        text_color = "white"
+        node_lines.append(
+            f'    {n} [label="{_esc(NODE_LABELS[n])}", '
+            f'fillcolor="{fill}", fontcolor="{text_color}", '
+            f'style="filled,rounded", shape=box, fontname="Helvetica-Bold", '
+            f'fontsize=12, margin="0.18,0.10"];'
+        )
+
+    edge_lines = []
+    for s, t, label in EDGES:
+        col = edge_color_map.get((s, t))
+        is_active = col is not None
+        color = col if is_active else C_NEUTRAL_LIGHT
+        penwidth = 3 if is_active else 1
+        fontcolor = color if is_active else "#90a4ae"
+        edge_lines.append(
+            f'    {s} -> {t} [label="{label}", color="{color}", '
+            f'penwidth={penwidth}, fontsize=10, fontcolor="{fontcolor}", '
+            f'fontname="Helvetica"];'
+        )
+
+    dot = (
+        "digraph G {\n"
+        '    bgcolor="#fafbfc";\n'
+        "    rankdir=LR;\n"
+        "    nodesep=0.35;\n"
+        "    ranksep=0.55;\n"
+        "    splines=spline;\n"
+        + same_rank_lines + "\n"
+        + "\n".join(node_lines) + "\n"
+        + "\n".join(edge_lines) + "\n"
+        "}"
+    )
+    st.graphviz_chart(dot, use_container_width=True)
+
     legend = (
         f"<span style='color:{C_ALLOW}'>● allowed</span> &nbsp; "
         f"<span style='color:{C_ESC}'>● requires approval</span> &nbsp; "
@@ -545,16 +609,6 @@ def render_system_map(events: List[dict], selected: Optional[dict]) -> None:
         f"<span style='color:{C_COND}'>● conditional</span> &nbsp; "
         f"<span style='color:{C_NEUTRAL}'>● structural</span>"
     )
-
-    fig = go.Figure(data=edge_traces + [node_trace])
-    fig.update_layout(
-        showlegend=False, margin=dict(l=10, r=10, t=10, b=10), height=340,
-        xaxis=dict(range=[-0.05, 1.0], showgrid=False, zeroline=False, visible=False),
-        yaxis=dict(range=[0, 1.05], showgrid=False, zeroline=False, visible=False),
-        plot_bgcolor="#fafbfc", paper_bgcolor="#fafbfc",
-        annotations=arrow_annotations,
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown(f"<div style='text-align:right; font-size:0.78rem;'>{legend}</div>", unsafe_allow_html=True)
 
 
@@ -649,6 +703,74 @@ def render_mission_status_banner(events: List[dict]) -> None:
             f"All within delegated authority · {allowed} action(s) allowed, no escalations, no blocks."
         )
     st.markdown(f'<div class="status-banner {cls}">{msg}</div>', unsafe_allow_html=True)
+
+
+def render_story_arc(events: List[dict]) -> None:
+    """Seven moments at a glance.
+
+    The single most important piece of orientation for someone landing on the
+    app cold: a horizontal strip of one card per moment, naming the service,
+    the trigger, and the verdict in color. The order is the order the agent
+    walked the portfolio. Lets a reader grasp the whole story in 10 seconds
+    before scrolling into the ledger / network / forensics.
+    """
+
+    records = _decision_records(events)
+    if not records:
+        return
+
+    def _service_from_summary(summary: Optional[str]) -> str:
+        if not summary:
+            return ""
+        for tok in summary.split():
+            if tok.startswith("service="):
+                return tok.split("=", 1)[1]
+        return ""
+
+    display_names = {
+        "netflix": "Netflix",
+        "spotify": "Spotify Premium",
+        "dazn": "DAZN Total",
+        "apple_tv": "Apple TV+",
+        "bundle_savvy": "BundleSavvy",
+        "amazon_prime": "Amazon Prime",
+        "disney_plus": "Disney+",
+    }
+    triggers = {
+        "netflix": "€13.99 · fresh baseline",
+        "spotify": "+5% drift · inside tolerance",
+        "dazn": "€34.99 · over €30 ceiling",
+        "apple_tv": "new service · not pre-approved",
+        "bundle_savvy": "asked for full card #",
+        "amazon_prime": "silent monthly → annual",
+        "disney_plus": "stale ConsumerContext",
+    }
+
+    cards = []
+    for i, r in enumerate(records, start=1):
+        svc = _service_from_summary(r.action_payload_summary)
+        name = display_names.get(svc, svc or r.intended_action)
+        trigger = triggers.get(svc, r.intended_action)
+        verdict = r.decision.value
+        color = DECISION_COLORS.get(verdict, C_NEUTRAL)
+        verdict_label = DECISION_SHORT.get(verdict, verdict).upper()
+        cards.append(
+            f"""
+            <div class="moment-card" style="border-left: 6px solid {color};">
+              <div class="moment-num">{i}</div>
+              <div class="moment-name">{name}</div>
+              <div class="moment-trigger">{trigger}</div>
+              <div class="moment-verdict" style="background:{color};">{verdict_label}</div>
+            </div>
+            """
+        )
+
+    st.markdown(
+        '<div class="story-arc-label">The seven moments of Eva\'s portfolio renewal '
+        '<span style="color:#90a4ae;font-weight:400;">- left to right, as the agent walked them</span></div>'
+        '<div class="story-arc">' + "".join(cards) + '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_sarc_strip() -> None:
@@ -983,16 +1105,32 @@ def main() -> None:
     )
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-    # ---- Sidebar ------------------------------------------------------
+    # The demo has a single end-to-end scenario; the sidebar no longer offers
+    # a picker. The trace source toggle stays so reviewers can re-run live.
+    scenario = "subscription_renewal"
     with st.sidebar:
         st.header("Mission")
-        scenario = st.selectbox(
-            "Scenario",
-            options=list(SCENARIO_BUILDERS.keys()),
-            format_func=lambda s: SCENARIO_BRIEFS[s].title if s in SCENARIO_BRIEFS else s,
+        st.markdown(
+            """
+            <div style="background:#1a2530;color:#eceff1;padding:12px 14px;
+                        border-radius:8px;line-height:1.35;">
+              <div style="font-size:0.72rem;letter-spacing:0.08em;
+                          color:#90a4ae;text-transform:uppercase;">Scenario</div>
+              <div style="font-size:1.0rem;font-weight:700;margin-top:2px;">
+                Eva's subscription portfolio
+              </div>
+              <div style="font-size:0.78rem;color:#b0bec5;margin-top:4px;">
+                Seven moments across Netflix, Spotify, DAZN, Apple TV+,
+                Amazon Prime, Disney+, and a billing aggregator.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        source = st.radio("Trace source", ["Pre-generated", "Runtime"], index=0,
-                          help="Pre-generated traces ship in examples/. Runtime traces are produced by 'Simulate governed mission' below.")
+        source = st.radio(
+            "Trace source", ["Pre-generated", "Runtime"], index=0,
+            help="Pre-generated traces ship in examples/. Runtime traces are produced by 'Re-run mission' below.",
+        )
         st.divider()
         st.subheader("Custom mission (optional)")
         intent_text = st.text_area(
@@ -1001,7 +1139,7 @@ def main() -> None:
             height=140,
         )
         seed = st.number_input("Random seed", min_value=0, max_value=2**31 - 1, value=42, step=1)
-        if st.button("Simulate governed mission", use_container_width=True):
+        if st.button("Re-run mission", use_container_width=True):
             RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
             target = RUNTIME_DIR / f"{scenario}.jsonl"
             if target.exists():
@@ -1010,7 +1148,7 @@ def main() -> None:
             # fixtures; the text area is editable for narration but does not
             # currently reshape the scenario fixtures.
             run_scenario(scenario, out_dir=RUNTIME_DIR, seed=int(seed))
-            st.success(f"Simulated {scenario} with seed={seed}")
+            st.success(f"Re-ran {scenario} with seed={seed}")
 
     trace_dir = EXAMPLES_DIR if source == "Pre-generated" else RUNTIME_DIR
     traces = _load_traces(trace_dir)
@@ -1034,9 +1172,12 @@ def main() -> None:
     if not events:
         st.warning(
             f"No trace for `{scenario}` under `{trace_dir.relative_to(REPO_ROOT)}`. "
-            "Choose **Pre-generated** in the sidebar or click **Simulate governed mission**."
+            "Choose **Pre-generated** in the sidebar or click **Re-run mission**."
         )
         return
+
+    # ---- Story arc: seven moments at a glance, right under the hero ----
+    render_story_arc(events)
 
     # ---- 1. MISSION ---------------------------------------------------
     st.markdown('<div class="section-h">1 · Mission</div>', unsafe_allow_html=True)
