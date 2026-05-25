@@ -53,7 +53,7 @@ _DATA_FIELDS_VOCAB = {
 def parse_consumer_intent(
     text: str,
     *,
-    consumer_id: str = "consumer:eva",
+    consumer_id: str = "consumer:oli",
     delegation_id: Optional[str] = None,
     default_approved_retailers: Optional[List[str]] = None,
 ) -> ParsedIntent:

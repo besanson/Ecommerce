@@ -43,8 +43,8 @@ DEFAULT_MISSION_TEXT = (
 
 def build_consumer_profile() -> ConsumerProfile:
     return ConsumerProfile(
-        consumer_id="consumer:eva",
-        display_name="Eva",
+        consumer_id="consumer:oli",
+        display_name="Oli",
         shipping_country="DE",
         payment_token_id="ptok_demo_001",
         permitted_data_fields=["shipping_address", "payment_token_id"],
@@ -56,7 +56,7 @@ def build_consumer_delegation() -> ShoppingDelegation:
     # mission text above.
     return ShoppingDelegation(
         delegation_id="delegation:half-marathon-shoes",
-        consumer_id="consumer:eva",
+        consumer_id="consumer:oli",
         mission="Buy running shoes for a half marathon",
         budget_ceiling_eur=180.0,
         auto_buy_threshold_eur=150.0,
@@ -198,10 +198,10 @@ SUBSCRIPTION_MISSION_TEXT = (
 
 
 def build_subscription_context(*, with_approved_services_version: bool = True) -> ConsumerContext:
-    """Eva's data foundation for the subscription mission.
+    """Oli's data foundation for the subscription mission.
 
     The data_baseline carries the agent's last-known facts about each real
-    service in Eva's portfolio. Spotify's price has drifted by ~10% (still
+    service in Oli's portfolio. Spotify's price has drifted by ~10% (still
     within tolerance), DAZN has jumped past the block ceiling, Amazon Prime
     has silently switched from monthly to annual billing, Apple TV+ is new
     and not on the approved list, and BundleSavvy is a billing aggregator
@@ -234,9 +234,9 @@ def build_subscription_context(*, with_approved_services_version: bool = True) -
         },
     }
     return ConsumerContext(
-        context_id="ctx:eva-subs",
+        context_id="ctx:oli-subs",
         context_version=7,
-        consumer_id="consumer:eva",
+        consumer_id="consumer:oli",
         mission_id="mission:subscription_renewal",
         delegation_parameters=delegation_parameters,
         data_baseline=data_baseline,
@@ -253,7 +253,7 @@ def build_subscription_delegation() -> ShoppingDelegation:
 
     return ShoppingDelegation(
         delegation_id="delegation:subscription-renewal",
-        consumer_id="consumer:eva",
+        consumer_id="consumer:oli",
         mission=SUBSCRIPTION_MISSION_TEXT,
         budget_ceiling_eur=30.0,            # mirrors monthly_block_threshold
         auto_buy_threshold_eur=15.0,        # mirrors monthly_escalate_threshold
@@ -269,10 +269,10 @@ def build_subscription_delegation() -> ShoppingDelegation:
 
 
 def build_subscription_services(*, seed=None) -> Dict[str, SubscriptionServiceAgent]:
-    """Eva's real-world subscription portfolio with the services' current terms.
+    """Oli's real-world subscription portfolio with the services' current terms.
 
     Compare each service's `monthly_eur` against the baseline above to see
-    where Eva's data has drifted from reality. These mismatches are the
+    where Oli's data has drifted from reality. These mismatches are the
     governance moments the scenario exercises:
 
       - netflix:       matches baseline                                → ALLOW

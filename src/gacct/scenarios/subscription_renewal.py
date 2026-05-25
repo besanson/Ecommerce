@@ -1,6 +1,6 @@
 """Subscription renewal - the seven-moment headline scenario.
 
-Eva delegates her entire subscription portfolio to the agent. The agent walks
+Oli delegates her entire subscription portfolio to the agent. The agent walks
 the portfolio end-to-end (AGENTIC), comparing each service's current terms
 against a versioned ConsumerContext (DATA), and routing every consequential
 step through PAG -> ATM -> PAA (GOVERNANCE).
@@ -43,7 +43,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
     store.record_event(
         scenario_id=SCENARIO_ID,
         event_type="mission_opened",
-        actor="consumer:eva",
+        actor="consumer:oli",
         summary="opening subscription renewal mission",
         detail={
             "mission_text": MISSION_TEXT,
@@ -63,13 +63,13 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
 
     reasoner = ConsumerAgentReasoner(delegation, seed=seed)
     agent = ConsumerAgent(
-        name="agent:eva-renewer",
+        name="agent:oli-renewer",
         delegation=delegation,
         engine=engine,
         transport=transport,
         reasoner=reasoner,
         on_thought=lambda t: store.record_thought(
-            scenario_id=SCENARIO_ID, actor="agent:eva-renewer", topic=t.topic, content=t.content,
+            scenario_id=SCENARIO_ID, actor="agent:oli-renewer", topic=t.topic, content=t.content,
         ),
         context=context,
         context_validator=validator,
@@ -149,7 +149,7 @@ def run(engine: GovernanceEngine, store: TraceStore, transport: MCPTransport, se
     store.record_event(
         scenario_id=SCENARIO_ID,
         event_type="scenario_completed",
-        actor="agent:eva-renewer",
+        actor="agent:oli-renewer",
         summary="subscription renewal mission complete",
         detail={"context_version_at_end": agent.context.context_version},
     )

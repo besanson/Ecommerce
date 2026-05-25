@@ -80,7 +80,7 @@ def pillar_tags(action_type: str) -> list:
 SCENARIO_BRIEFS: Dict[str, ScenarioBrief] = {
     "subscription_renewal": ScenarioBrief(
         title="Subscription renewal · seven moments",
-        subtitle="Eva's real portfolio: Netflix · Spotify · DAZN · Apple TV+ · Amazon Prime · Disney+",
+        subtitle="Oli's real portfolio: Netflix · Spotify · DAZN · Apple TV+ · Amazon Prime · Disney+",
         what_to_watch=(
             "An end-to-end portfolio renewal exercising all three pillars. Each row "
             "in the ledger carries [AGENTIC] [DATA] [GOVERNANCE] tags showing which "
@@ -415,7 +415,7 @@ NODE_POSITIONS = {
     "payment_boundary":  (0.85, 0.32),
 }
 NODE_LABELS = {
-    "consumer": "Consumer\n(Eva)",
+    "consumer": "Consumer\n(Oli)",
     "consumer_agent": "Consumer\nAgent",
     "governance": "Governance\nPAG · ATM · PAA",
     "approval": "Approval\nService",
@@ -766,7 +766,7 @@ def render_story_arc(events: List[dict]) -> None:
         )
 
     st.markdown(
-        '<div class="story-arc-label">The seven moments of Eva\'s portfolio renewal '
+        '<div class="story-arc-label">The seven moments of Oli\'s portfolio renewal '
         '<span style="color:#90a4ae;font-weight:400;">- left to right, as the agent walked them</span></div>'
         '<div class="story-arc">' + "".join(cards) + '</div>',
         unsafe_allow_html=True,
@@ -1117,7 +1117,7 @@ def main() -> None:
               <div style="font-size:0.72rem;letter-spacing:0.08em;
                           color:#90a4ae;text-transform:uppercase;">Scenario</div>
               <div style="font-size:1.0rem;font-weight:700;margin-top:2px;">
-                Eva's subscription portfolio
+                Oli's subscription portfolio
               </div>
               <div style="font-size:0.78rem;color:#b0bec5;margin-top:4px;">
                 Seven moments across Netflix, Spotify, DAZN, Apple TV+,

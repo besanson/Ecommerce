@@ -1,6 +1,6 @@
 # Narrative demo script (3 minutes)
 
-This script is for an executive walkthrough. The audience is mixed business + technical. The tone is sober. Slides are optional; the Streamlit app is the visual aid. The scenario throughout is the same one: Eva's subscription portfolio.
+This script is for an executive walkthrough. The audience is mixed business + technical. The tone is sober. Slides are optional; the Streamlit app is the visual aid. The scenario throughout is the same one: Oli's subscription portfolio.
 
 ---
 
@@ -8,9 +8,9 @@ This script is for an executive walkthrough. The audience is mixed business + te
 
 > "Consumer-facing AI agents are about to act on our behalf - on our payment instruments, against retailers, at machine speed. We do not have a control problem with how these agents *think*. We have a control problem with what they are allowed to *do*. This is a demo of runtime governance over delegated commerce action."
 
-Cue: Mission tab. Read Eva's delegation aloud - auto-renew under €15/month, escalate €15-€30, block above €30 or any unapproved new service, no sharing of payment data beyond token and billing email, cancel on silent billing-period changes.
+Cue: Mission tab. Read Oli's delegation aloud - auto-renew under €15/month, escalate €15-€30, block above €30 or any unapproved new service, no sharing of payment data beyond token and billing email, cancel on silent billing-period changes.
 
-> "Eva has delegated authority. She has not delegated accountability."
+> "Oli has delegated authority. She has not delegated accountability."
 
 ---
 
@@ -18,7 +18,7 @@ Cue: Mission tab. Read Eva's delegation aloud - auto-renew under €15/month, es
 
 Open the Ledger. Walk to row 1 (Netflix) and row 2 (Spotify Premium).
 
-> "First, Netflix at €13.99 - fresh baseline, under the auto-renew threshold. ALLOW. The agent did not ask Eva. Second, Spotify Premium has drifted from €9.99 to €10.49 - 5% over baseline, inside Eva's tolerance. The pack returns ALLOW_WITH_CONDITIONS, the condition being that the agent log the new baseline forward. ATM checks the condition at execute time, not earlier. This is what bounded delegation looks like at the cheap end of the portfolio."
+> "First, Netflix at €13.99 - fresh baseline, under the auto-renew threshold. ALLOW. The agent did not ask Oli. Second, Spotify Premium has drifted from €9.99 to €10.49 - 5% over baseline, inside Oli's tolerance. The pack returns ALLOW_WITH_CONDITIONS, the condition being that the agent log the new baseline forward. ATM checks the condition at execute time, not earlier. This is what bounded delegation looks like at the cheap end of the portfolio."
 
 Point out:
 - `policies_evaluated` - the rule packs that opined.
@@ -30,7 +30,7 @@ Point out:
 
 Walk to row 3 (DAZN Total) and row 5 (BundleSavvy aggregator).
 
-> "DAZN Total has jumped from €19.99 to €34.99 - over Eva's €30 block ceiling. BLOCK. No renewal. No charge. Then BundleSavvy, a billing aggregator, asks for `full_card_number` - outside Eva's whitelist. BLOCK. Eva's identity was never disclosed. The subscription service's `confirm_renewal` tool was never invoked. Evidence exists for every refusal."
+> "DAZN Total has jumped from €19.99 to €34.99 - over Oli's €30 block ceiling. BLOCK. No renewal. No charge. Then BundleSavvy, a billing aggregator, asks for `full_card_number` - outside Oli's whitelist. BLOCK. Oli's identity was never disclosed. The subscription service's `confirm_renewal` tool was never invoked. Evidence exists for every refusal."
 
 Open Forensics, pick the BundleSavvy block, walk through PAG → ATM → PAA and the facts used.
 
@@ -40,7 +40,7 @@ Open Forensics, pick the BundleSavvy block, walk through PAG → ATM → PAA and
 
 Walk to row 4 (Apple TV+) and row 6 (Amazon Prime).
 
-> "This is where governance is most visible. Apple TV+ is new - not on Eva's approved list. The data foundation has a gap. The pack does not block, because the agent's correct move is not to silently refuse - it is to surface a single-action authority extension. ESCALATE. Same for Amazon Prime: the service silently switched from monthly to annual billing. Eva's baseline says monthly. The subscription-terms pack says ESCALATE. In a production system Eva would get a notification with one button each. In the demo, both escalations time out unresolved - the open approval ticket is itself audit evidence."
+> "This is where governance is most visible. Apple TV+ is new - not on Oli's approved list. The data foundation has a gap. The pack does not block, because the agent's correct move is not to silently refuse - it is to surface a single-action authority extension. ESCALATE. Same for Amazon Prime: the service silently switched from monthly to annual billing. Oli's baseline says monthly. The subscription-terms pack says ESCALATE. In a production system Oli would get a notification with one button each. In the demo, both escalations time out unresolved - the open approval ticket is itself audit evidence."
 
 ---
 

@@ -145,7 +145,7 @@ def test_scenario_produces_seven_decision_records_with_context_pinned(tmp_path: 
     assert seqs == sorted(seqs)
     for e in decisions:
         d = e["detail"]
-        assert d["context_id"] == "ctx:eva-subs", d
+        assert d["context_id"] == "ctx:oli-subs", d
         assert isinstance(d["context_version"], int) and d["context_version"] >= 7
 
 

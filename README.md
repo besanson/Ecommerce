@@ -79,13 +79,13 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed responsibili
 
 ## 5. Scenario
 
-The demo is a **subscription portfolio renewal** delegated by consumer "Eva" to her personal agent. It is intentionally the only end-to-end scenario, because it exercises all three pillars in a single mission - agentic portfolio sweep, versioned ConsumerContext with deliberately stale records, and seven distinct governance moments across Eva's real-world subscriptions. The delegation captures:
+The demo is a **subscription portfolio renewal** delegated by consumer "Oli" to her personal agent. It is intentionally the only end-to-end scenario, because it exercises all three pillars in a single mission - agentic portfolio sweep, versioned ConsumerContext with deliberately stale records, and seven distinct governance moments across Oli's real-world subscriptions. The delegation captures:
 
 > Renew my active subscriptions up to 15 EUR/month automatically; escalate renewals between 15-30 EUR; block anything above 30 EUR or any new service I have not pre-approved. No sharing of payment data beyond token and billing email. Cancel if the renewal silently changes billing period.
 
-Eva's portfolio: **Netflix, Spotify Premium, DAZN Total, Apple TV+, Amazon Prime, Disney+**, plus a billing-aggregator called BundleSavvy. Each step produces a different governance verdict depending on whether the consumer's data baseline matches reality, whether the policy threshold is exceeded, and whether explicit consumer approval is on file.
+Oli's portfolio: **Netflix, Spotify Premium, DAZN Total, Apple TV+, Amazon Prime, Disney+**, plus a billing-aggregator called BundleSavvy. Each step produces a different governance verdict depending on whether the consumer's data baseline matches reality, whether the policy threshold is exceeded, and whether explicit consumer approval is on file.
 
-The delegation maps directly to the policy packs in `policies/`. The scenario in `src/gacct/scenarios/subscription_renewal.py` walks Eva's portfolio end-to-end and exercises the seven moments listed in §7.
+The delegation maps directly to the policy packs in `policies/`. The scenario in `src/gacct/scenarios/subscription_renewal.py` walks Oli's portfolio end-to-end and exercises the seven moments listed in §7.
 
 ## 6. How to run
 
@@ -109,14 +109,14 @@ Then open the URL Streamlit prints (default `http://localhost:8501`).
 
 ## 7. Demo paths
 
-One end-to-end scenario - `subscription_renewal` - ships in `src/gacct/scenarios/`. It walks Eva's real subscription portfolio one service at a time and emits a different verdict at each moment. Each row in the UI is tagged `[AGENTIC]` `[DATA]` `[GOVERNANCE]` so the three pillars are visible per moment.
+One end-to-end scenario - `subscription_renewal` - ships in `src/gacct/scenarios/`. It walks Oli's real subscription portfolio one service at a time and emits a different verdict at each moment. Each row in the UI is tagged `[AGENTIC]` `[DATA]` `[GOVERNANCE]` so the three pillars are visible per moment.
 
 | # | Service                         | Trigger                                                         | Verdict                  |
 |---|---------------------------------|-----------------------------------------------------------------|--------------------------|
 | 1 | **Netflix** (€13.99)            | Fresh baseline, under auto-renew threshold                      | `ALLOW`                  |
 | 2 | **Spotify Premium** (€10.49)    | +5% price drift, inside the 10% tolerance                       | `ALLOW_WITH_CONDITIONS`  |
 | 3 | **DAZN Total** (€34.99)         | Jumped over the €30 block ceiling                               | `BLOCK`                  |
-| 4 | **Apple TV+** (new)             | Not on Eva's approved-services list                             | `ESCALATE`               |
+| 4 | **Apple TV+** (new)             | Not on Oli's approved-services list                             | `ESCALATE`               |
 | 5 | **BundleSavvy** (aggregator)    | Asked for `full_card_number` - outside the billing whitelist    | `BLOCK`                  |
 | 6 | **Amazon Prime**                | Silently switched from monthly to annual billing                | `ESCALATE`               |
 | 7 | **Disney+** (stale context)     | Renewal attempted against an incomplete ConsumerContext         | `BLOCK_MISSING_CONTEXT`  |
@@ -190,6 +190,25 @@ Plausible next steps if this pattern were to be hardened toward pre-production:
     ├── risk-and-limitations.md
     └── self-review.md
 ```
+
+## 12. How this maps to ACP / SPT and the wider agentic-commerce stack
+
+This repository implements the **governance layer** of the emerging consumer-agentic-commerce stack. It does not implement the transaction-protocol layer (ACP-style endpoints) or the payment-instrument layer (Shared Payment Tokens), but it is designed so that those layers would slot in at known seams. The table below is a candid map of what's modeled, what's stubbed, and where the seams are.
+
+| Stack concern | What this repo models | Where it would integrate |
+|---|---|---|
+| **Delegated authority** | `ShoppingDelegation` + `ConsumerContext` carry budget ceiling, escalation threshold, approved-services list, billing-data whitelist, billing-period change rule. Every governed action is attributed to the delegating human. | Authoritative source would be an authorization service (OIDC-style mandate or a delegation token). The engine would consume the mandate the same way it consumes the local fixture. |
+| **ACP-style transaction lifecycle** (`create_transaction` / `update_transaction` / `complete_transaction` / `cancel_transaction`) | Not modeled. The demo treats each subscription decision as a single `renew_subscription` / `share_billing_data` / `cancel_subscription` action that the engine governs and the service confirms over MCP. | A real implementation would wrap each ACP endpoint call in an engine-governed action so that `complete_transaction` cannot fire without a fresh PAG verdict. The `confirm_renewal` MCP method in the demo is the seam: replace it with `acp.complete_transaction(...)`. |
+| **Shared Payment Token (SPT) scoping** | The Billing Token Boundary in the system map is a placeholder. The `permitted_data_fields = ["payment_token", "billing_email"]` rule keeps card data on the consumer side; the BundleSavvy moment shows what happens when a counterparty asks for more. | A real SPT would carry `merchant_of_record`, `amount_cap`, `single_use`, `valid_until`, and `mandate_id` claims. The PAG already has the structure to refuse to release a token whose claims do not match the proposed action; rule kinds would be added to `policies/auto_buy.yaml` and a new `payment_token.yaml`. |
+| **Merchant-of-record clarity** | Implicit: each subscription service is its own MoR. Not asserted in any record. | A `merchant_of_record` field on `DecisionRecord` would carry the MoR for each governed transaction. Add it to `src/gacct/domain/decisions.py` and assert non-null at PAA. |
+| **Fraud signals / agent-vs-bot differentiation** | Not modeled. | Would attach to `ProposedAction` as a `signals` map and be consumed by a new rule kind (`fraud_risk_under_threshold`). The engine boundary is the right place to attach risk-side feedback. |
+| **Audit trail** | Sequenced JSONL trace store with a demo hash chain; every governed action emits a `DecisionRecord` with `policies_evaluated`, `facts_used`, `acting_on_behalf_of`, `approval_outcome`, `atm_status`, `context_id`, `context_version`. | Production version needs signed records and an external timestamp authority. See `docs/risk-and-limitations.md`. |
+| **Human-in-the-loop checkpoints** | `ApprovalService` + `ScriptedApprovalPolicy`. The escalation moments in the scenario route to it; ATM blocks execution until the outcome is APPROVED. | A real channel (push notification + signed callback) replaces the scripted policy. The engine seam is `approval_resolver`. |
+| **Policy enforcement (dynamic rule engine)** | Versioned YAML policy packs in `policies/`, loaded once at startup, evaluated per action. `applies_to_actions` controls which pack opines on which action type. | Hot reload + per-mission pack binding would harden this. The pack-version-pinning property already supports forensic re-evaluation. |
+| **Multi-agent orchestration** | Single consumer agent against one or more retailer/service agents. The MCP transport is the wire. | The engine boundary is action-type agnostic, so a discovery agent and an evaluation agent could each have their proposed actions governed by the same engine. |
+| **Regulatory framing (EU AI Act risk tier, sector rules)** | Not directly addressed in the artifact. The demo's evidence shape (structured DecisionRecord per action, with policies evaluated and facts used) is the kind of evidence sector regulators would request. | A `regulatory_tags` field on policy packs would let an auditor filter "show me every escalation under a payment-services rule in the last 24 hours". |
+
+The honest summary: this repo's contribution is the *intercept-and-evidence* pattern. The ACP and SPT specifications define the wire shape of agent-driven commerce; this engine demonstrates what bounded delegation, escalation, and auditability *over* that wire should look like. Pluggability at the seams above is the work needed to combine them.
 
 ## Screenshots
 
